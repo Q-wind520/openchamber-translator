@@ -276,7 +276,7 @@ ${Io}`;var M=class extends Error{code;constructor(o,i){super(o),this.name="Trans
         </svg>
       </span>
       <div class="brand-copy">
-        <h1>\u7FFB\u8BD1</h1>
+        <h1>Translator</h1>
         <p title="\u5728 \u8BBE\u7F6E \u2192 \u4F1A\u8BDD \u2192 Small Model \u4E2D\u9009\u62E9\u6A21\u578B">OPENCODE</p>
       </div>
     </div>

@@ -10,7 +10,7 @@ export const PANEL_TEMPLATE = `
         </svg>
       </span>
       <div class="brand-copy">
-        <h1>翻译</h1>
+        <h1>Translator</h1>
         <p title="在 设置 → 会话 → Small Model 中选择模型">OPENCODE</p>
       </div>
     </div>

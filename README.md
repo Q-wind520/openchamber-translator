@@ -1,4 +1,4 @@
-# OpenChamber Translation
+# OpenChamber Translator
 
 一个以**全文翻译**为主的 OpenChamber 侧栏扩展，并在原文中提供**划词实时翻译**。
 
@@ -30,7 +30,7 @@ npm run check
 2. 在「文件夹、ZIP 或 URL」中填入当前仓库的绝对路径，例如：
    `/path/to/openchamber-translation`
 3. 点击添加，并批准「使用你的 Small Model」权限。
-4. 点击右侧栏的「翻译」图标打开面板。
+4. 点击右侧栏的「Translator」图标打开面板。
 
 开发时可直接使用文件夹安装：修改 `src/` 后运行 `npm run dev`（或 `npm run build`），再重新加载面板。
 
@@ -41,7 +41,7 @@ npm run check
 1. 确保 DeepSeek 已配置在 OpenCode / OpenChamber 的 Provider 中。
 2. 打开 **设置 → 会话 → Small Model**。
 3. 选择 DeepSeek，例如 `deepseek/deepseek-flash`。
-4. 回到「翻译」面板，直接翻译即可。
+4. 回到「Translator」面板，直接翻译即可。
 
 > OpenChamber 扩展接口只开放 Small Model 生成能力，扩展无法自行选择或读取具体 Provider/模型。因此实际使用的模型以你的 Small Model 设置为准。
 >
