@@ -71,8 +71,7 @@ function formatNumber(value: number): string {
 }
 
 function formatDuration(milliseconds: number): string {
-  if (milliseconds < 1000) return `${Math.max(1, Math.round(milliseconds))} 毫秒`;
-  return `${(milliseconds / 1000).toFixed(1)} 秒`;
+  return `${Math.max(0.1, milliseconds / 1000).toFixed(1)} 秒`;
 }
 
 function friendlyErrorMessage(error: unknown): string {
@@ -121,7 +120,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     resultMeta: byId('result-meta'),
     collapse: byId<HTMLButtonElement>('collapse'),
     copy: byId<HTMLButtonElement>('copy'),
-    empty: byId('empty'),
+    autoSelectionToggle: byId<HTMLButtonElement>('auto-selection-toggle'),
     displayButtons: [
       ...document.querySelectorAll<HTMLButtonElement>('[data-display]'),
     ],
@@ -168,8 +167,8 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     }
   }
 
-  function refreshEmptyVisibility(): void {
-    ui.empty.hidden = Boolean(result || error || activeRun);
+  function syncAutoSelection(): void {
+    ui.autoSelectionToggle.setAttribute('aria-checked', String(preferences.autoSelection));
   }
 
   function syncResultCollapse(): void {
@@ -190,7 +189,6 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       ui.resultMeta.textContent = '';
       ui.result.replaceChildren();
       syncResultCollapse();
-      refreshEmptyVisibility();
       return;
     }
 
@@ -222,7 +220,6 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     ui.result.replaceChildren(fragment);
     ui.resultArea.hidden = false;
     syncResultCollapse();
-    refreshEmptyVisibility();
   }
 
   function renderSelection(): void {
@@ -244,7 +241,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     ui.selectionError.classList.remove('is-notice');
 
     if (view.phase === 'loading') {
-      ui.selectionMeta.textContent = `${charLabel} · 正在翻译`;
+      ui.selectionMeta.textContent = charLabel;
       ui.selectionLoading.hidden = false;
       ui.selectionOutput.hidden = true;
       ui.selectionError.hidden = true;
@@ -277,13 +274,11 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     if (!error) {
       ui.error.hidden = true;
       ui.errorMessage.textContent = '';
-      refreshEmptyVisibility();
       return;
     }
 
     ui.errorMessage.textContent = error.message;
     ui.error.hidden = false;
-    refreshEmptyVisibility();
   }
 
   function resetOutcome(): void {
@@ -298,9 +293,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     ui.charCount.textContent = `${formatNumber(length)} 字`;
     const over = length > MAX_TRANSLATION_CHARS;
     ui.charCount.classList.toggle('over-limit', over);
-    ui.charCount.title = over
-      ? `单次最多翻译 ${formatNumber(MAX_TRANSLATION_CHARS)} 字`
-      : '';
+    ui.charCount.title = over ? `最多 ${formatNumber(MAX_TRANSLATION_CHARS)} 字` : '';
     ui.charCount.setAttribute(
       'aria-label',
       over
@@ -321,29 +314,25 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     ui.translate.disabled = busy || !hasText || overLimit;
     ui.translate.classList.toggle('is-loading', busy);
     ui.translate.setAttribute('aria-busy', String(busy));
-    ui.translateLabel.textContent = busy ? '翻译中…' : '全文翻译';
+    ui.translateLabel.textContent = busy ? '翻译中…' : '翻译全文';
     ui.translate.title = overLimit
-      ? `单次最多翻译 ${formatNumber(MAX_TRANSLATION_CHARS)} 字`
-      : '全文翻译（Ctrl/Cmd + Enter）';
+      ? `最多 ${formatNumber(MAX_TRANSLATION_CHARS)} 字`
+      : '翻译全文（Ctrl/Cmd + Enter）';
     ui.cancel.disabled = activeRun?.cancelling ?? true;
   }
 
   function showProgress(completed = 0, total = 0): void {
     ui.progress.hidden = false;
     ui.progressText.textContent =
-      total > 0
-        ? `OpenCode 正在翻译 · ${completed}/${total} 段`
-        : '正在准备翻译…';
+      total > 0 ? `正在翻译 ${completed}/${total}` : '准备翻译…';
     const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
     ui.progressBar.style.width = `${percent}%`;
-    refreshEmptyVisibility();
   }
 
   function hideProgress(): void {
     ui.progress.hidden = true;
     ui.progressBar.style.width = '0%';
-    ui.progressText.textContent = '正在翻译…';
-    refreshEmptyVisibility();
+    ui.progressText.textContent = '准备翻译…';
   }
 
   function copyButtonFeedback(button: HTMLButtonElement): void {
@@ -380,14 +369,14 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       await host.writeClipboard(text);
       copyButtonFeedback(button);
     } catch {
-      showToast('error', '复制失败，请手动选择译文复制。', true);
+      showToast('error', '复制失败，请手动复制。', true);
     }
   }
 
   async function copyTranslation(): Promise<void> {
     const text =
       result?.outcome.paragraphs.map((paragraph) => paragraph.translation).join('\n\n') ?? '';
-    await copyText(text, ui.copy, '结果超过 32,000 字，请分段复制。');
+    await copyText(text, ui.copy, '超过 32,000 字，请分段复制。');
   }
 
   function showSelectionLoading(source: string): void {
@@ -472,6 +461,8 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   function handleSelectionChange(): void {
     if (activeRun) return;
 
+    if (!preferences.autoSelection) return;
+
     const selected = currentSelectedText();
     if (!selected) {
       lastTriggeredSelection = '';
@@ -493,7 +484,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
           phase: 'notice',
           source: selected,
           charCount: selected.length,
-          error: `选区超过 ${formatNumber(MAX_SELECTION_TRANSLATION_CHARS)} 字，已跳过划词翻译，请使用全文翻译。`,
+          error: `选区超过 ${formatNumber(MAX_SELECTION_TRANSLATION_CHARS)} 字，请改用全文翻译。`,
         };
         renderSelection();
         return;
@@ -509,7 +500,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     if (!sourceText) return;
     if (sourceText.length > MAX_TRANSLATION_CHARS) {
       error = {
-        message: `单次最多翻译 ${formatNumber(MAX_TRANSLATION_CHARS)} 字，请缩短内容后重试。`,
+        message: `最多 ${formatNumber(MAX_TRANSLATION_CHARS)} 字，请缩短后重试。`,
       };
       renderError();
       return;
@@ -568,17 +559,17 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) {
-        showToast('info', '剪贴板里没有可翻译的文字。', true);
+        showToast('info', '剪贴板为空。', true);
         return;
       }
       ui.sourceInput.value = text;
       ui.sourceInput.dispatchEvent(new Event('input', { bubbles: true }));
       ui.sourceInput.focus();
       ui.sourceInput.setSelectionRange(0, 0);
-      showToast('success', '已从剪贴板读取文字。');
+      showToast('success', '已读取剪贴板。');
     } catch {
       ui.sourceInput.focus();
-      showToast('info', '无法读取剪贴板，请按 Ctrl/Cmd + V 粘贴。', true);
+      showToast('info', '请使用 Ctrl/Cmd + V 粘贴。', true);
     }
   }
 
@@ -586,6 +577,13 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     if (!isTargetLanguageCode(ui.targetLanguage.value)) return;
     preferences.targetLanguage = ui.targetLanguage.value;
     persist();
+  });
+
+  ui.autoSelectionToggle.addEventListener('click', () => {
+    preferences.autoSelection = !preferences.autoSelection;
+    syncAutoSelection();
+    persist();
+    if (!preferences.autoSelection) closeSelectionCard();
   });
 
   ui.displayButtons.forEach((button) => {
@@ -643,7 +641,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     void copyText(
       selectionView.translation,
       ui.selectionCopy,
-      '划词译文超过 32,000 字，请缩小选区。',
+      '超过 32,000 字，请减小选区。',
     );
   });
 
@@ -666,6 +664,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   syncCharCount();
   syncControls();
   syncDisplayState();
+  syncAutoSelection();
   renderResult();
   renderError();
   renderSelection();

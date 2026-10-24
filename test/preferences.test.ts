@@ -19,17 +19,17 @@ describe('preferences', () => {
   it('drops invalid saved fields and keeps valid ones', () => {
     expect(
       normalizePreferences(
-        { targetLanguage: 'ja', displayMode: 'translation' },
+        { targetLanguage: 'ja', displayMode: 'translation', autoSelection: false },
         'zh-CN',
       ),
-    ).toEqual({ targetLanguage: 'ja', displayMode: 'translation' });
+    ).toEqual({ targetLanguage: 'ja', displayMode: 'translation', autoSelection: false });
 
     expect(
       normalizePreferences(
         { targetLanguage: 'klingon', displayMode: 'sideways', provider: 'deepseek' },
         'zh-CN',
       ),
-    ).toEqual({ targetLanguage: 'zh-Hans', displayMode: 'bilingual' });
+    ).toEqual({ targetLanguage: 'zh-Hans', displayMode: 'bilingual', autoSelection: true });
   });
 
   it('loads, validates, saves, and falls back cleanly', async () => {
@@ -49,12 +49,18 @@ describe('preferences', () => {
     const initial = await loadPreferences(host, 'en-US');
     expect(initial.targetLanguage).toBe('en');
     expect(initial.displayMode).toBe('bilingual');
+    expect(initial.autoSelection).toBe(true);
 
-    await savePreferences(host, { targetLanguage: 'zh-Hant', displayMode: 'source' });
+    await savePreferences(host, {
+      targetLanguage: 'zh-Hant',
+      displayMode: 'source',
+      autoSelection: false,
+    });
 
     await expect(loadPreferences(host, 'en-US')).resolves.toEqual({
       targetLanguage: 'zh-Hant',
       displayMode: 'source',
+      autoSelection: false,
     });
 
     get.mockRejectedValueOnce(new Error('storage unavailable'));

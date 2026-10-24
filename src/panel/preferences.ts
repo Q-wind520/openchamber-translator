@@ -8,6 +8,7 @@ import type { DisplayMode } from '../translation/types';
 export interface Preferences {
   targetLanguage: string;
   displayMode: DisplayMode;
+  autoSelection: boolean;
 }
 
 const STORAGE_KEY = 'preferences-v2';
@@ -20,6 +21,7 @@ export function defaultPreferences(locale: string | undefined): Preferences {
   return {
     targetLanguage: defaultTargetForLocale(locale),
     displayMode: 'bilingual',
+    autoSelection: true,
   };
 }
 
@@ -39,7 +41,10 @@ export function normalizePreferences(
       ? raw.displayMode
       : 'bilingual';
 
-  return { targetLanguage, displayMode };
+  const autoSelection =
+    typeof raw.autoSelection === 'boolean' ? raw.autoSelection : true;
+
+  return { targetLanguage, displayMode, autoSelection };
 }
 
 export async function loadPreferences(
@@ -61,5 +66,6 @@ export async function savePreferences(
   await host.storage.set(STORAGE_KEY, {
     targetLanguage: preferences.targetLanguage,
     displayMode: preferences.displayMode,
+    autoSelection: preferences.autoSelection,
   });
 }

@@ -10,22 +10,9 @@ export const PANEL_TEMPLATE = `
         </svg>
       </span>
       <div class="brand-copy">
-        <h1>全文翻译</h1>
-        <p>OpenCode · Small Model</p>
+        <h1>翻译</h1>
+        <p title="在 设置 → 会话 → Small Model 中选择模型">OPENCODE</p>
       </div>
-    </div>
-  </header>
-
-  <div class="model-deck">
-    <div class="model-source">
-      <span class="model-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="m12 2.8 1.7 5.2L19 10l-5.3 1.9L12 17.3l-1.7-5.4L5 10l5.3-2 1.7-5.2Z" fill="currentColor"/><path d="m18.2 15.5.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8.8-2.3Z" fill="currentColor" opacity=".55"/></svg>
-      </span>
-      <div class="model-copy">
-        <strong>OpenCode 模型</strong>
-        <span>沿用 OpenChamber 配置</span>
-      </div>
-      <span class="model-tag">免 Key</span>
     </div>
 
     <label class="target-control" for="target-language">
@@ -37,39 +24,32 @@ export const PANEL_TEMPLATE = `
         </span>
       </span>
     </label>
-  </div>
-
-  <p class="model-note">
-    <span class="model-note-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 10.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.7" r="1" fill="currentColor"/></svg>
-    </span>
-    <span>需要 DeepSeek？在 <strong>设置 → 会话 → Small Model</strong> 选择已配置的模型，无需在此填写 API Key。</span>
-  </p>
+  </header>
 
   <div class="editor-card">
     <div class="card-top">
       <label class="field-title" for="source-input">原文</label>
-      <span class="char-count" id="char-count">0 字</span>
+      <div class="card-tools">
+        <button class="auto-switch" id="auto-selection-toggle" type="button" role="switch" aria-checked="true" title="选中原文时自动划词翻译">
+          <span>自动划词</span>
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        </button>
+        <span class="char-count" id="char-count">0 字</span>
+      </div>
     </div>
-    <textarea class="source-input" id="source-input" rows="8" spellcheck="false" maxlength="100000" placeholder="粘贴文章或 Markdown，按段落生成对照译文…"></textarea>
-    <div class="editor-meta">
-      <span class="selection-pip" aria-hidden="true"></span>
-      <span>按段落拆分翻译，保留原文顺序与行内格式</span>
-    </div>
+    <textarea class="source-input" id="source-input" rows="8" spellcheck="false" maxlength="100000" placeholder="粘贴或输入原文…"></textarea>
     <div class="editor-footer">
       <div class="mini-actions">
-        <button class="text-button" id="paste" type="button" title="从剪贴板读取文字">
+        <button class="icon-button icon-button-small" id="paste" type="button" aria-label="读取剪贴板" title="读取剪贴板">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="4.5" width="12" height="16" rx="2.5" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5V3.8c0-.7.6-1.3 1.3-1.3h3.4c.7 0 1.3.6 1.3 1.3v.7H9Z" fill="currentColor"/></svg>
-          剪贴板
         </button>
-        <button class="text-button" id="clear" type="button" title="清空">
+        <button class="icon-button icon-button-small" id="clear" type="button" aria-label="清空原文" title="清空">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-          清空
         </button>
       </div>
       <button class="primary-button" id="translate" type="button" disabled>
         <span class="button-spinner" aria-hidden="true"></span>
-        <span id="translate-label">全文翻译</span>
+        <span id="translate-label">翻译全文</span>
       </button>
     </div>
   </div>
@@ -96,7 +76,7 @@ export const PANEL_TEMPLATE = `
     <div class="selection-body">
       <div class="selection-loading" id="selection-loading" role="status">
         <span class="spinner" aria-hidden="true"></span>
-        <span id="selection-loading-text">正在翻译选区…</span>
+        <span id="selection-loading-text">翻译中…</span>
       </div>
       <p class="selection-output" id="selection-output" tabindex="0" hidden></p>
       <div class="selection-error" id="selection-error" hidden>
@@ -148,20 +128,9 @@ export const PANEL_TEMPLATE = `
     <div class="result" id="result" tabindex="0" aria-label="译文内容"></div>
   </div>
 
-  <div class="empty-state" id="empty">
-    <div class="empty-art" aria-hidden="true">
-      <span class="doc-line doc-line-long"></span>
-      <span class="doc-line"></span>
-      <span class="doc-line doc-line-short"></span>
-      <span class="doc-accent">译</span>
-    </div>
-    <p class="empty-title">长文，也有从容的读法</p>
-    <p class="empty-copy">粘贴文章或 Markdown，按段落生成对照译文。翻译由 OpenChamber 已配置的模型完成，无需额外 API Key。</p>
-  </div>
-
   <p class="privacy-note">
     <span class="privacy-dot" aria-hidden="true"></span>
-    文本交给 OpenChamber 当前模型 · 不写入会话
+    内容不写入会话
   </p>
 </div>
 `;

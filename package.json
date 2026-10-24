@@ -1,8 +1,8 @@
 {
   "name": "openchamber-translation",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "仅保留全文翻译的 OpenChamber 侧栏扩展，使用 OpenChamber 已配置的 Small Model，无需额外 API Key。",
+  "description": "OpenChamber 翻译侧栏扩展：全文翻译与自动划词，使用已配置的 Small Model。",
   "type": "module",
   "engines": {
     "node": ">=22.12"
@@ -22,7 +22,7 @@
     "contributes": {
       "panel": {
         "id": "openchamber-translation",
-        "name": "全文翻译",
+        "name": "翻译",
         "icon": "icon.svg",
         "entry": "panel/index.html"
       },

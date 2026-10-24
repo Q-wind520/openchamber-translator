@@ -55,42 +55,42 @@ function mapGenerateError(error: unknown): TranslationError {
     switch (error.code) {
       case 'NO_MODEL':
         return new TranslationError(
-          '没有可用的 Small Model。请在 设置 → 会话 → Small Model 中选择一个可用模型（例如 DeepSeek），然后重试。',
+          '未配置 Small Model。请在 设置 → 会话 → Small Model 中选择模型后重试。',
           'no-model',
         );
       case 'MODEL_FAILED':
         return new TranslationError(
-          '模型调用失败。请确认 OpenCode 中对应模型已登录、可用且未超出额度。',
+          '模型调用失败，请检查模型是否可用。',
           'model-failed',
         );
       case 'HOST_TIMEOUT':
         return new TranslationError(
-          '模型响应超时。请缩短文本、换用更快的模型后重试。',
+          '模型响应超时，请缩短文本或换用更快的模型。',
           'timeout',
         );
       case 'NOT_GRANTED':
         return new TranslationError(
-          '扩展尚未获得 Small Model 使用权限。请在 设置 → 扩展 中重新批准。',
+          '缺少模型权限，请在 设置 → 扩展 中重新批准。',
           'provider',
         );
       case 'HOST_UNAVAILABLE':
       case 'DISABLED':
         return new TranslationError(
-          '当前无法使用 OpenChamber 模型，请重新打开翻译面板。',
+          '当前无法使用模型，请重新打开面板。',
           'provider',
         );
       case 'RESPONSE_TOO_LARGE':
-        return new TranslationError('模型返回内容过大，请缩短文本后重试。', 'invalid-response');
+        return new TranslationError('模型返回内容过大，请缩短文本。', 'invalid-response');
       default:
         return new TranslationError(
-          error.message || '模型调用失败，请稍后重试。',
+          error.message || '模型调用失败，请重试。',
           'provider',
         );
     }
   }
 
   return new TranslationError(
-    error instanceof Error ? error.message : '模型调用失败，请稍后重试。',
+    error instanceof Error ? error.message : '模型调用失败，请重试。',
     'provider',
   );
 }
@@ -117,12 +117,12 @@ export function createOpenCodeTranslator(options: OpenCodeTranslatorOptions): Pr
 
       throwIfAborted(signal);
       if (typeof generated?.text !== 'string') {
-        throw new TranslationError('模型返回了无法识别的结果，请重试。', 'invalid-response');
+        throw new TranslationError('模型返回异常结果，请重试。', 'invalid-response');
       }
 
       const translation = cleanGeneratedTranslation(generated.text);
       if (!translation) {
-        throw new TranslationError('模型返回了空译文，请重试。', 'invalid-response');
+        throw new TranslationError('模型返回空译文，请重试。', 'invalid-response');
       }
       translations.push(translation);
     }
