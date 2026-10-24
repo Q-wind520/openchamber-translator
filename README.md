@@ -25,8 +25,8 @@ npm run check
 在 OpenChamber 中：
 
 1. 打开 **设置 → 扩展**。
-2. 在「文件夹、ZIP 或 URL」中填入项目绝对路径：
-   `/home/qwind/Projects/openchamber-translation`
+2. 在「文件夹、ZIP 或 URL」中填入当前仓库的绝对路径，例如：
+   `/path/to/openchamber-translation`
 3. 点击添加，并批准「使用你的 Small Model」权限。
 4. 点击右侧栏的「全文翻译」图标打开面板。
 
