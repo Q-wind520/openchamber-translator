@@ -74,6 +74,38 @@ export const PANEL_TEMPLATE = `
     </div>
   </div>
 
+  <article class="selection-card" id="selection-card" aria-live="polite" aria-labelledby="selection-title" hidden>
+    <header class="selection-head">
+      <div class="selection-heading">
+        <span class="selection-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 8.5V6.8A1.8 1.8 0 0 1 6.8 5h1.7M15.5 5h1.7A1.8 1.8 0 0 1 19 6.8v1.7M19 15.5v1.7a1.8 1.8 0 0 1-1.8 1.8h-1.7M8.5 19H6.8A1.8 1.8 0 0 1 5 17.2v-1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="m9 9-2.4 6m2.1-2.2h3.4M14 12.2l1.8 2.8M18 12l-2.2 3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+        <span class="selection-title" id="selection-title">划词翻译</span>
+        <span class="selection-meta" id="selection-meta"></span>
+      </div>
+      <div class="selection-actions">
+        <button class="icon-button icon-button-small copy-button" id="selection-copy" type="button" data-label="复制划词译文" aria-label="复制划词译文" title="复制划词译文" hidden>
+          <svg class="copy-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="8.5" y="8.5" width="10" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 5.5h-8a2 2 0 0 0-2 2v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <svg class="check-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5.5 12.5 4.1 4 8.9-9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-button icon-button-small" id="selection-close" type="button" aria-label="关闭划词翻译" title="关闭">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="selection-body">
+      <div class="selection-loading" id="selection-loading" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="selection-loading-text">正在翻译选区…</span>
+      </div>
+      <p class="selection-output" id="selection-output" tabindex="0" hidden></p>
+      <div class="selection-error" id="selection-error" hidden>
+        <span id="selection-error-message"></span>
+        <button class="text-button" id="selection-retry" type="button">重试</button>
+      </div>
+    </div>
+  </article>
+
   <div class="progress-card" id="progress" role="status" hidden>
     <div class="progress-line">
       <span class="spinner" aria-hidden="true"></span>
@@ -104,13 +136,16 @@ export const PANEL_TEMPLATE = `
       </div>
       <div class="result-tools">
         <span class="result-meta" id="result-meta"></span>
-        <button class="icon-button icon-button-small copy-button" id="copy" type="button" aria-label="复制译文" title="复制译文">
+        <button class="icon-button icon-button-small collapse-button" id="collapse" type="button" aria-label="收起译文" title="收起译文" aria-expanded="true" aria-controls="result">
+          <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 14 6-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-button icon-button-small copy-button" id="copy" type="button" data-label="复制译文" aria-label="复制译文" title="复制译文">
           <svg class="copy-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="8.5" y="8.5" width="10" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 5.5h-8a2 2 0 0 0-2 2v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <svg class="check-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5.5 12.5 4.1 4 8.9-9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
     </div>
-    <div class="result" id="result"></div>
+    <div class="result" id="result" tabindex="0" aria-label="译文内容"></div>
   </div>
 
   <div class="empty-state" id="empty">

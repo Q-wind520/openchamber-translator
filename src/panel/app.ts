@@ -36,6 +36,20 @@ interface DisplayError {
   message: string;
 }
 
+type SelectionPhase = 'loading' | 'ready' | 'error' | 'notice';
+
+interface SelectionView {
+  phase: SelectionPhase;
+  source: string;
+  charCount: number;
+  translation?: string;
+  error?: string;
+  elapsedMs?: number;
+}
+
+const MAX_SELECTION_TRANSLATION_CHARS = 2_000;
+const SELECTION_DEBOUNCE_MS = 450;
+
 export interface AppHandle {
   dispose(): void;
 }
@@ -61,9 +75,20 @@ function formatDuration(milliseconds: number): string {
   return `${(milliseconds / 1000).toFixed(1)} 秒`;
 }
 
+function friendlyErrorMessage(error: unknown): string {
+  if (error instanceof TranslationError || error instanceof RangeError) {
+    return error.message;
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return '翻译没有完成，请重试。';
+}
+
 export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   const { host, root } = options;
   const preferences: Preferences = await loadPreferences(host, options.ready.locale);
+  const translateWithModel = createOpenCodeTranslator({ host });
 
   root.innerHTML = PANEL_TEMPLATE;
 
@@ -82,9 +107,19 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     error: byId('error'),
     errorMessage: byId('error-message'),
     errorRetry: byId<HTMLButtonElement>('error-retry'),
+    selectionCard: byId('selection-card'),
+    selectionMeta: byId('selection-meta'),
+    selectionLoading: byId('selection-loading'),
+    selectionOutput: byId<HTMLParagraphElement>('selection-output'),
+    selectionError: byId('selection-error'),
+    selectionErrorMessage: byId('selection-error-message'),
+    selectionRetry: byId<HTMLButtonElement>('selection-retry'),
+    selectionCopy: byId<HTMLButtonElement>('selection-copy'),
+    selectionClose: byId<HTMLButtonElement>('selection-close'),
     resultArea: byId('result-area'),
     result: byId('result'),
     resultMeta: byId('result-meta'),
+    collapse: byId<HTMLButtonElement>('collapse'),
     copy: byId<HTMLButtonElement>('copy'),
     empty: byId('empty'),
     displayButtons: [
@@ -95,8 +130,16 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   let activeRun: ActiveRun | null = null;
   let result: ResultState | null = null;
   let error: DisplayError | null = null;
+  let resultCollapsed = false;
   let saveQueue: Promise<void> = Promise.resolve();
-  let copyTimer = 0;
+  const copyTimers = new WeakMap<HTMLButtonElement, number>();
+
+  let selectionView: SelectionView | null = null;
+  let selectionTimer = 0;
+  let selectionQueue: string | null = null;
+  let selectionBusy = false;
+  let selectionGeneration = 0;
+  let lastTriggeredSelection = '';
 
   for (const language of TARGET_LANGUAGES) {
     const option = document.createElement('option');
@@ -129,12 +172,24 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     ui.empty.hidden = Boolean(result || error || activeRun);
   }
 
+  function syncResultCollapse(): void {
+    const collapsed = Boolean(result) && resultCollapsed;
+    ui.result.hidden = collapsed;
+    ui.resultArea.classList.toggle('is-collapsed', collapsed);
+    ui.collapse.setAttribute('aria-expanded', String(!collapsed));
+    const label = collapsed ? '展开译文' : '收起译文';
+    ui.collapse.setAttribute('aria-label', label);
+    ui.collapse.title = label;
+  }
+
   function renderResult(): void {
     syncDisplayState();
     if (!result) {
+      resultCollapsed = false;
       ui.resultArea.hidden = true;
       ui.resultMeta.textContent = '';
       ui.result.replaceChildren();
+      syncResultCollapse();
       refreshEmptyVisibility();
       return;
     }
@@ -166,7 +221,56 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
 
     ui.result.replaceChildren(fragment);
     ui.resultArea.hidden = false;
+    syncResultCollapse();
     refreshEmptyVisibility();
+  }
+
+  function renderSelection(): void {
+    const view = selectionView;
+    if (!view) {
+      ui.selectionCard.hidden = true;
+      ui.selectionMeta.textContent = '';
+      ui.selectionLoading.hidden = true;
+      ui.selectionOutput.hidden = true;
+      ui.selectionOutput.textContent = '';
+      ui.selectionError.hidden = true;
+      ui.selectionErrorMessage.textContent = '';
+      ui.selectionCopy.hidden = true;
+      return;
+    }
+
+    ui.selectionCard.hidden = false;
+    const charLabel = `${formatNumber(view.charCount)} 字`;
+    ui.selectionError.classList.remove('is-notice');
+
+    if (view.phase === 'loading') {
+      ui.selectionMeta.textContent = `${charLabel} · 正在翻译`;
+      ui.selectionLoading.hidden = false;
+      ui.selectionOutput.hidden = true;
+      ui.selectionError.hidden = true;
+      ui.selectionCopy.hidden = true;
+      return;
+    }
+
+    if (view.phase === 'ready') {
+      ui.selectionMeta.textContent = `${charLabel} · ${formatDuration(view.elapsedMs ?? 0)}`;
+      ui.selectionLoading.hidden = true;
+      ui.selectionOutput.textContent = view.translation ?? '';
+      ui.selectionOutput.hidden = false;
+      ui.selectionOutput.scrollTop = 0;
+      ui.selectionError.hidden = true;
+      ui.selectionCopy.hidden = false;
+      return;
+    }
+
+    ui.selectionMeta.textContent = charLabel;
+    ui.selectionLoading.hidden = true;
+    ui.selectionOutput.hidden = true;
+    ui.selectionError.hidden = false;
+    ui.selectionErrorMessage.textContent = view.error ?? '翻译失败，请重试。';
+    ui.selectionRetry.hidden = view.phase !== 'error';
+    ui.selectionError.classList.toggle('is-notice', view.phase === 'notice');
+    ui.selectionCopy.hidden = true;
   }
 
   function renderError(): void {
@@ -242,33 +346,160 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     refreshEmptyVisibility();
   }
 
-  function copyButtonFeedback(): void {
-    window.clearTimeout(copyTimer);
-    ui.copy.classList.add('is-copied');
-    ui.copy.setAttribute('aria-label', '已复制');
-    ui.copy.title = '已复制';
-    copyTimer = window.setTimeout(() => {
-      ui.copy.classList.remove('is-copied');
-      ui.copy.setAttribute('aria-label', '复制译文');
-      ui.copy.title = '复制译文';
-    }, 1200);
+  function copyButtonFeedback(button: HTMLButtonElement): void {
+    const previous = copyTimers.get(button);
+    if (previous) window.clearTimeout(previous);
+
+    const defaultLabel = button.dataset.label || '复制译文';
+    button.classList.add('is-copied');
+    button.setAttribute('aria-label', '已复制');
+    button.title = '已复制';
+    copyTimers.set(
+      button,
+      window.setTimeout(() => {
+        button.classList.remove('is-copied');
+        button.setAttribute('aria-label', defaultLabel);
+        button.title = defaultLabel;
+        copyTimers.delete(button);
+      }, 1200),
+    );
   }
 
-  async function copyTranslation(): Promise<void> {
-    const text =
-      result?.outcome.paragraphs.map((paragraph) => paragraph.translation).join('\n\n') ?? '';
+  async function copyText(
+    text: string,
+    button: HTMLButtonElement,
+    tooLongMessage: string,
+  ): Promise<void> {
     if (!text.trim()) return;
     if (text.length > 32_000) {
-      showToast('error', '结果超过 32,000 字，请分段复制。', true);
+      showToast('error', tooLongMessage, true);
       return;
     }
 
     try {
       await host.writeClipboard(text);
-      copyButtonFeedback();
+      copyButtonFeedback(button);
     } catch {
       showToast('error', '复制失败，请手动选择译文复制。', true);
     }
+  }
+
+  async function copyTranslation(): Promise<void> {
+    const text =
+      result?.outcome.paragraphs.map((paragraph) => paragraph.translation).join('\n\n') ?? '';
+    await copyText(text, ui.copy, '结果超过 32,000 字，请分段复制。');
+  }
+
+  function showSelectionLoading(source: string): void {
+    selectionView = { phase: 'loading', source, charCount: source.length };
+    renderSelection();
+  }
+
+  async function drainSelectionQueue(): Promise<void> {
+    if (selectionBusy) return;
+    selectionBusy = true;
+
+    try {
+      while (selectionQueue) {
+        const text = selectionQueue;
+        selectionQueue = null;
+        const generation = selectionGeneration;
+        showSelectionLoading(text);
+        const startedAt = Date.now();
+
+        try {
+          const response = await translateWithModel({
+            segments: [text],
+            target: getTargetLanguage(preferences.targetLanguage),
+            signal: new AbortController().signal,
+          });
+          if (generation !== selectionGeneration || selectionQueue) continue;
+          if (!selectionView || selectionView.source !== text) continue;
+
+          const translation = response.translations[0]?.trim();
+          if (!translation) {
+            throw new TranslationError('模型返回了空译文，请重试。', 'invalid-response');
+          }
+          selectionView = {
+            phase: 'ready',
+            source: text,
+            charCount: text.length,
+            translation,
+            elapsedMs: Date.now() - startedAt,
+          };
+          renderSelection();
+        } catch (caught) {
+          if (generation !== selectionGeneration || selectionQueue) continue;
+          if (!selectionView || selectionView.source !== text) continue;
+          selectionView = {
+            phase: 'error',
+            source: text,
+            charCount: text.length,
+            error: friendlyErrorMessage(caught),
+          };
+          renderSelection();
+        }
+      }
+    } finally {
+      selectionBusy = false;
+      if (selectionQueue) void drainSelectionQueue();
+    }
+  }
+
+  function enqueueSelectionTranslation(text: string): void {
+    selectionGeneration += 1;
+    selectionQueue = text;
+    showSelectionLoading(text);
+    if (!selectionBusy) void drainSelectionQueue();
+  }
+
+  function closeSelectionCard(): void {
+    window.clearTimeout(selectionTimer);
+    selectionTimer = 0;
+    lastTriggeredSelection = '';
+    selectionGeneration += 1;
+    selectionQueue = null;
+    selectionView = null;
+    renderSelection();
+  }
+
+  function currentSelectedText(): string {
+    const start = ui.sourceInput.selectionStart ?? 0;
+    const end = ui.sourceInput.selectionEnd ?? 0;
+    return end > start ? ui.sourceInput.value.slice(start, end).trim() : '';
+  }
+
+  function handleSelectionChange(): void {
+    if (activeRun) return;
+
+    const selected = currentSelectedText();
+    if (!selected) {
+      lastTriggeredSelection = '';
+      window.clearTimeout(selectionTimer);
+      selectionTimer = 0;
+      return;
+    }
+    if (selected === lastTriggeredSelection) return;
+
+    lastTriggeredSelection = selected;
+    window.clearTimeout(selectionTimer);
+    selectionTimer = window.setTimeout(() => {
+      selectionTimer = 0;
+      if (activeRun) return;
+      if (selected.length > MAX_SELECTION_TRANSLATION_CHARS) {
+        selectionGeneration += 1;
+        selectionQueue = null;
+        selectionView = {
+          phase: 'notice',
+          source: selected,
+          charCount: selected.length,
+          error: `选区超过 ${formatNumber(MAX_SELECTION_TRANSLATION_CHARS)} 字，已跳过划词翻译，请使用全文翻译。`,
+        };
+        renderSelection();
+        return;
+      }
+      enqueueSelectionTranslation(selected);
+    }, SELECTION_DEBOUNCE_MS);
   }
 
   async function startTranslation(): Promise<void> {
@@ -284,6 +515,9 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       return;
     }
 
+    window.clearTimeout(selectionTimer);
+    selectionTimer = 0;
+
     const controller = new AbortController();
     const run: ActiveRun = { controller, cancelling: false };
     activeRun = run;
@@ -297,9 +531,8 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     try {
       const plan = createTranslationPlan(sourceText, OPENCODE_LIMITS);
       if (plan.segments.length === 0) throw new Error('没有可翻译的文本。');
-      const translate = createOpenCodeTranslator({ host });
       const outcome = await runTranslation(plan, {
-        translate,
+        translate: translateWithModel,
         limits: OPENCODE_LIMITS,
         target: getTargetLanguage(preferences.targetLanguage),
         signal: controller.signal,
@@ -312,16 +545,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       renderResult();
     } catch (caught) {
       if (!isCancellation(caught)) {
-        if (caught instanceof TranslationError || caught instanceof RangeError) {
-          error = { message: caught.message };
-        } else {
-          error = {
-            message:
-              caught instanceof Error && caught.message.trim()
-                ? caught.message
-                : '翻译没有完成，请重试。',
-          };
-        }
+        error = { message: friendlyErrorMessage(caught) };
         renderError();
       }
     } finally {
@@ -380,8 +604,15 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   ui.sourceInput.addEventListener('input', () => {
     syncCharCount();
     syncControls();
-    if (!activeRun) resetOutcome();
+    if (!activeRun) {
+      closeSelectionCard();
+      resetOutcome();
+    }
   });
+
+  for (const eventName of ['select', 'pointerup', 'keyup'] as const) {
+    ui.sourceInput.addEventListener(eventName, handleSelectionChange);
+  }
 
   ui.sourceInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -396,16 +627,40 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   ui.paste.addEventListener('click', () => void readClipboard());
   ui.copy.addEventListener('click', () => void copyTranslation());
 
+  ui.collapse.addEventListener('click', () => {
+    if (!result) return;
+    resultCollapsed = !resultCollapsed;
+    syncResultCollapse();
+  });
+
+  ui.selectionClose.addEventListener('click', closeSelectionCard);
+  ui.selectionRetry.addEventListener('click', () => {
+    if (selectionView?.phase !== 'error') return;
+    enqueueSelectionTranslation(selectionView.source);
+  });
+  ui.selectionCopy.addEventListener('click', () => {
+    if (selectionView?.phase !== 'ready' || !selectionView.translation) return;
+    void copyText(
+      selectionView.translation,
+      ui.selectionCopy,
+      '划词译文超过 32,000 字，请缩小选区。',
+    );
+  });
+
   ui.clear.addEventListener('click', () => {
     if (activeRun) return;
     ui.sourceInput.value = '';
     ui.sourceInput.focus();
+    closeSelectionCard();
     syncCharCount();
     syncControls();
     resetOutcome();
   });
 
-  const onBeforeUnload = () => activeRun?.controller.abort();
+  const onBeforeUnload = () => {
+    window.clearTimeout(selectionTimer);
+    activeRun?.controller.abort();
+  };
   window.addEventListener('beforeunload', onBeforeUnload);
 
   syncCharCount();
@@ -413,11 +668,13 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   syncDisplayState();
   renderResult();
   renderError();
+  renderSelection();
 
   return {
     dispose() {
       window.removeEventListener('beforeunload', onBeforeUnload);
-      window.clearTimeout(copyTimer);
+      window.clearTimeout(selectionTimer);
+      selectionGeneration += 1;
       activeRun?.controller.abort();
     },
   };

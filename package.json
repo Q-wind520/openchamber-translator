@@ -1,6 +1,6 @@
 {
   "name": "openchamber-translation",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "仅保留全文翻译的 OpenChamber 侧栏扩展，使用 OpenChamber 已配置的 Small Model，无需额外 API Key。",
   "type": "module",
