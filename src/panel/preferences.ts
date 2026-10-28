@@ -4,8 +4,10 @@ import {
   isTargetLanguageCode,
 } from '../translation/languages';
 import type { DisplayMode } from '../translation/types';
+import { isUiLanguage, type UiLanguage } from './i18n';
 
 export interface Preferences {
+  uiLanguage: UiLanguage;
   targetLanguage: string;
   displayMode: DisplayMode;
   autoSelection: boolean;
@@ -19,6 +21,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function defaultPreferences(locale: string | undefined): Preferences {
   return {
+    uiLanguage: 'auto',
     targetLanguage: defaultTargetForLocale(locale),
     displayMode: 'bilingual',
     autoSelection: true,
@@ -44,7 +47,8 @@ export function normalizePreferences(
   const autoSelection =
     typeof raw.autoSelection === 'boolean' ? raw.autoSelection : true;
 
-  return { targetLanguage, displayMode, autoSelection };
+  const uiLanguage = isUiLanguage(raw.uiLanguage) ? raw.uiLanguage : 'auto';
+  return { uiLanguage, targetLanguage, displayMode, autoSelection };
 }
 
 export async function loadPreferences(
@@ -64,6 +68,7 @@ export async function savePreferences(
   preferences: Preferences,
 ): Promise<void> {
   await host.storage.set(STORAGE_KEY, {
+    uiLanguage: preferences.uiLanguage,
     targetLanguage: preferences.targetLanguage,
     displayMode: preferences.displayMode,
     autoSelection: preferences.autoSelection,

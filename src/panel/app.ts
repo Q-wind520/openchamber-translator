@@ -22,6 +22,7 @@ import {
   type Preferences,
 } from './preferences';
 import { PANEL_TEMPLATE } from './template';
+import { describeError, formatError, formatCount, formatDuration, isMessageKey, isUiLanguage, message, resolveUiLocale, type ErrorMessage, type MessageKey } from './i18n';
 
 interface ResultState {
   outcome: TranslationOutcome;
@@ -32,9 +33,7 @@ interface ActiveRun {
   cancelling: boolean;
 }
 
-interface DisplayError {
-  message: string;
-}
+type DisplayError = ErrorMessage;
 
 type SelectionPhase = 'loading' | 'ready' | 'error' | 'notice';
 
@@ -43,7 +42,7 @@ interface SelectionView {
   source: string;
   charCount: number;
   translation?: string;
-  error?: string;
+  error?: DisplayError;
   elapsedMs?: number;
 }
 
@@ -51,13 +50,15 @@ const MAX_SELECTION_TRANSLATION_CHARS = 2_000;
 const SELECTION_DEBOUNCE_MS = 450;
 
 export interface AppHandle {
+  updateHostLocale(locale: string): void;
   dispose(): void;
 }
 
 export interface MountAppOptions {
-  host: HostClient;
+  host: Pick<HostClient, 'storage' | 'generate' | 'toast' | 'writeClipboard'>;
   root: HTMLElement;
-  ready: HostReadyContext;
+  ready: Pick<HostReadyContext, 'locale'>;
+  preferences?: Preferences;
 }
 
 function byId<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -66,32 +67,18 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   return element as T;
 }
 
-function formatNumber(value: number): string {
-  return value.toLocaleString('zh-CN');
-}
-
-function formatDuration(milliseconds: number): string {
-  return `${Math.max(0.1, milliseconds / 1000).toFixed(1)} 秒`;
-}
-
-function friendlyErrorMessage(error: unknown): string {
-  if (error instanceof TranslationError || error instanceof RangeError) {
-    return error.message;
-  }
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-  return '翻译没有完成，请重试。';
-}
-
 export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   const { host, root } = options;
-  const preferences: Preferences = await loadPreferences(host, options.ready.locale);
+  const preferences = options.preferences ?? await loadPreferences(host, options.ready.locale);
+  let hostLocale = options.ready.locale;
+  let locale = resolveUiLocale(preferences.uiLanguage, hostLocale);
+  const t = (key: MessageKey, params?: Record<string, number | string>) => message(locale, key, params);
   const translateWithModel = createOpenCodeTranslator({ host });
 
   root.innerHTML = PANEL_TEMPLATE;
 
   const ui = {
+    uiLanguage: byId<HTMLSelectElement>('ui-language'),
     targetLanguage: byId<HTMLSelectElement>('target-language'),
     sourceInput: byId<HTMLTextAreaElement>('source-input'),
     charCount: byId('char-count'),
@@ -131,7 +118,9 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   let error: DisplayError | null = null;
   let resultCollapsed = false;
   let saveQueue: Promise<void> = Promise.resolve();
-  const copyTimers = new WeakMap<HTMLButtonElement, number>();
+  const copyTimers = new Map<HTMLButtonElement, number>();
+  let progress: { completed: number; total: number } | null = null;
+  let disposed = false;
 
   let selectionView: SelectionView | null = null;
   let selectionTimer = 0;
@@ -152,10 +141,11 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     const snapshot: Preferences = { ...preferences };
     saveQueue = saveQueue
       .then(() => savePreferences(host, snapshot))
-      .catch(() => undefined);
+      .catch(() => showToast('error', t('saveFailed'), true));
   }
 
   function showToast(kind: 'info' | 'success' | 'error', message: string, dismiss = false): void {
+    if (disposed) return;
     void host.toast({ kind, message, dismiss }).catch(() => undefined);
   }
 
@@ -176,9 +166,16 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     ui.result.hidden = collapsed;
     ui.resultArea.classList.toggle('is-collapsed', collapsed);
     ui.collapse.setAttribute('aria-expanded', String(!collapsed));
-    const label = collapsed ? '展开译文' : '收起译文';
+    const label = t(collapsed ? 'expand' : 'collapse');
     ui.collapse.setAttribute('aria-label', label);
     ui.collapse.title = label;
+  }
+
+  function syncResultLabels(): void {
+    ui.resultMeta.textContent = result
+      ? `${formatCount(locale, result.outcome.paragraphs.length, 'paragraphs')} · ${formatDuration(locale, result.outcome.elapsedMs)}`
+      : '';
+    syncResultCollapse();
   }
 
   function renderResult(): void {
@@ -193,7 +190,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     }
 
     const { outcome } = result;
-    ui.resultMeta.textContent = `${outcome.paragraphs.length} 段 · ${formatDuration(outcome.elapsedMs)}`;
+    syncResultLabels();
     ui.result.className = `result mode-${preferences.displayMode}`;
     const fragment = document.createDocumentFragment();
 
@@ -222,7 +219,16 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     syncResultCollapse();
   }
 
+  function syncSelectionLabels(): void {
+    const view = selectionView;
+    ui.selectionMeta.textContent = view
+      ? `${formatCount(locale, view.charCount, 'characters')}${view.phase === 'ready' ? ` · ${formatDuration(locale, view.elapsedMs ?? 0)}` : ''}`
+      : '';
+    ui.selectionErrorMessage.textContent = view?.error ? formatError(locale, view.error) : t('failed');
+  }
+
   function renderSelection(): void {
+    syncSelectionLabels();
     const view = selectionView;
     if (!view) {
       ui.selectionCard.hidden = true;
@@ -237,11 +243,9 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     }
 
     ui.selectionCard.hidden = false;
-    const charLabel = `${formatNumber(view.charCount)} 字`;
     ui.selectionError.classList.remove('is-notice');
 
     if (view.phase === 'loading') {
-      ui.selectionMeta.textContent = charLabel;
       ui.selectionLoading.hidden = false;
       ui.selectionOutput.hidden = true;
       ui.selectionError.hidden = true;
@@ -250,7 +254,6 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     }
 
     if (view.phase === 'ready') {
-      ui.selectionMeta.textContent = `${charLabel} · ${formatDuration(view.elapsedMs ?? 0)}`;
       ui.selectionLoading.hidden = true;
       ui.selectionOutput.textContent = view.translation ?? '';
       ui.selectionOutput.hidden = false;
@@ -260,11 +263,9 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       return;
     }
 
-    ui.selectionMeta.textContent = charLabel;
     ui.selectionLoading.hidden = true;
     ui.selectionOutput.hidden = true;
     ui.selectionError.hidden = false;
-    ui.selectionErrorMessage.textContent = view.error ?? '翻译失败，请重试。';
     ui.selectionRetry.hidden = view.phase !== 'error';
     ui.selectionError.classList.toggle('is-notice', view.phase === 'notice');
     ui.selectionCopy.hidden = true;
@@ -277,7 +278,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       return;
     }
 
-    ui.errorMessage.textContent = error.message;
+    ui.errorMessage.textContent = formatError(locale, error);
     ui.error.hidden = false;
   }
 
@@ -290,15 +291,15 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
 
   function syncCharCount(): void {
     const length = ui.sourceInput.value.length;
-    ui.charCount.textContent = `${formatNumber(length)} 字`;
+    ui.charCount.textContent = formatCount(locale, length, 'characters');
     const over = length > MAX_TRANSLATION_CHARS;
     ui.charCount.classList.toggle('over-limit', over);
-    ui.charCount.title = over ? `最多 ${formatNumber(MAX_TRANSLATION_CHARS)} 字` : '';
+    ui.charCount.title = over ? t('maxChars', { limit: MAX_TRANSLATION_CHARS }) : '';
     ui.charCount.setAttribute(
       'aria-label',
       over
-        ? `${formatNumber(length)} 字，超过单次上限 ${formatNumber(MAX_TRANSLATION_CHARS)} 字`
-        : `${formatNumber(length)} 字`,
+        ? t('overLimit', { count: formatCount(locale, length, 'characters'), limit: MAX_TRANSLATION_CHARS })
+        : formatCount(locale, length, 'characters'),
     );
   }
 
@@ -314,41 +315,52 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     ui.translate.disabled = busy || !hasText || overLimit;
     ui.translate.classList.toggle('is-loading', busy);
     ui.translate.setAttribute('aria-busy', String(busy));
-    ui.translateLabel.textContent = busy ? '翻译中…' : '翻译全文';
+    ui.translateLabel.textContent = t(busy ? 'translating' : 'translate');
     ui.translate.title = overLimit
-      ? `最多 ${formatNumber(MAX_TRANSLATION_CHARS)} 字`
-      : '翻译全文（Ctrl/Cmd + Enter）';
+      ? t('maxChars', { limit: MAX_TRANSLATION_CHARS })
+      : t('translateHint');
     ui.cancel.disabled = activeRun?.cancelling ?? true;
   }
 
   function showProgress(completed = 0, total = 0): void {
-    ui.progress.hidden = false;
-    ui.progressText.textContent =
-      total > 0 ? `正在翻译 ${completed}/${total}` : '准备翻译…';
+    progress = { completed, total };
+    syncProgress();
     const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
     ui.progressBar.style.width = `${percent}%`;
   }
 
+  function syncProgress(): void {
+    if (!progress) return;
+    ui.progress.hidden = false;
+    ui.progressText.textContent =
+      activeRun?.cancelling ? t('cancelling')
+        : progress.total > 0 ? t('progress', progress) : t('preparing');
+  }
+
   function hideProgress(): void {
+    progress = null;
     ui.progress.hidden = true;
     ui.progressBar.style.width = '0%';
-    ui.progressText.textContent = '准备翻译…';
+    ui.progressText.textContent = t('preparing');
+  }
+
+  function syncCopyLabel(button: HTMLButtonElement): void {
+    const key = button.classList.contains('is-copied') ? 'copied' : button === ui.selectionCopy ? 'copySelection' : 'copy';
+    button.setAttribute('aria-label', t(key));
+    button.title = t(key);
   }
 
   function copyButtonFeedback(button: HTMLButtonElement): void {
     const previous = copyTimers.get(button);
     if (previous) window.clearTimeout(previous);
 
-    const defaultLabel = button.dataset.label || '复制译文';
     button.classList.add('is-copied');
-    button.setAttribute('aria-label', '已复制');
-    button.title = '已复制';
+    syncCopyLabel(button);
     copyTimers.set(
       button,
       window.setTimeout(() => {
         button.classList.remove('is-copied');
-        button.setAttribute('aria-label', defaultLabel);
-        button.title = defaultLabel;
+        syncCopyLabel(button);
         copyTimers.delete(button);
       }, 1200),
     );
@@ -357,26 +369,26 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   async function copyText(
     text: string,
     button: HTMLButtonElement,
-    tooLongMessage: string,
+    tooLongMessage: MessageKey,
   ): Promise<void> {
     if (!text.trim()) return;
     if (text.length > 32_000) {
-      showToast('error', tooLongMessage, true);
+      showToast('error', t(tooLongMessage, { limit: 32_000 }), true);
       return;
     }
 
     try {
       await host.writeClipboard(text);
-      copyButtonFeedback(button);
+      if (!disposed) copyButtonFeedback(button);
     } catch {
-      showToast('error', '复制失败，请手动复制。', true);
+      showToast('error', t('copyFailed'), true);
     }
   }
 
   async function copyTranslation(): Promise<void> {
     const text =
       result?.outcome.paragraphs.map((paragraph) => paragraph.translation).join('\n\n') ?? '';
-    await copyText(text, ui.copy, '超过 32,000 字，请分段复制。');
+    await copyText(text, ui.copy, 'copyTooLong');
   }
 
   function showSelectionLoading(source: string): void {
@@ -407,7 +419,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
 
           const translation = response.translations[0]?.trim();
           if (!translation) {
-            throw new TranslationError('模型返回了空译文，请重试。', 'invalid-response');
+            throw new TranslationError('Empty translation', 'invalid-response', 'empty-response');
           }
           selectionView = {
             phase: 'ready',
@@ -424,7 +436,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
             phase: 'error',
             source: text,
             charCount: text.length,
-            error: friendlyErrorMessage(caught),
+            error: describeError(caught),
           };
           renderSelection();
         }
@@ -484,7 +496,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
           phase: 'notice',
           source: selected,
           charCount: selected.length,
-          error: `选区超过 ${formatNumber(MAX_SELECTION_TRANSLATION_CHARS)} 字，请改用全文翻译。`,
+          error: { key: 'selectionTooLong', limit: MAX_SELECTION_TRANSLATION_CHARS },
         };
         renderSelection();
         return;
@@ -500,7 +512,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     if (!sourceText) return;
     if (sourceText.length > MAX_TRANSLATION_CHARS) {
       error = {
-        message: `最多 ${formatNumber(MAX_TRANSLATION_CHARS)} 字，请缩短后重试。`,
+        key: 'textTooLong', limit: MAX_TRANSLATION_CHARS,
       };
       renderError();
       return;
@@ -521,7 +533,11 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
 
     try {
       const plan = createTranslationPlan(sourceText, OPENCODE_LIMITS);
-      if (plan.segments.length === 0) throw new Error('没有可翻译的文本。');
+      if (plan.segments.length === 0) {
+        error = { key: 'noText' };
+        renderError();
+        return;
+      }
       const outcome = await runTranslation(plan, {
         translate: translateWithModel,
         limits: OPENCODE_LIMITS,
@@ -536,7 +552,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       renderResult();
     } catch (caught) {
       if (!isCancellation(caught)) {
-        error = { message: friendlyErrorMessage(caught) };
+        error = describeError(caught);
         renderError();
       }
     } finally {
@@ -550,7 +566,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     if (!activeRun || activeRun.cancelling) return;
     activeRun.cancelling = true;
     activeRun.controller.abort();
-    ui.progressText.textContent = '正在取消…';
+    syncProgress();
     syncControls();
   }
 
@@ -559,19 +575,52 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) {
-        showToast('info', '剪贴板为空。', true);
+        showToast('info', t('clipboardEmpty'), true);
         return;
       }
+      if (disposed) return;
       ui.sourceInput.value = text;
       ui.sourceInput.dispatchEvent(new Event('input', { bubbles: true }));
       ui.sourceInput.focus();
       ui.sourceInput.setSelectionRange(0, 0);
-      showToast('success', '已读取剪贴板。');
+      showToast('success', t('clipboardRead'));
     } catch {
       ui.sourceInput.focus();
-      showToast('info', '请使用 Ctrl/Cmd + V 粘贴。', true);
+      showToast('info', t('pasteManually'), true);
     }
   }
+
+  function applyLocale(): void {
+    locale = resolveUiLocale(preferences.uiLanguage, hostLocale);
+    document.documentElement.lang = locale;
+    ui.uiLanguage.value = preferences.uiLanguage;
+    for (const [data, attribute] of [
+      ['data-i18n', null], ['data-i18n-title', 'title'],
+      ['data-i18n-placeholder', 'placeholder'], ['data-i18n-aria-label', 'aria-label'],
+    ] as const) {
+      for (const node of root.querySelectorAll<HTMLElement>(`[${data}]`)) {
+        const key = node.getAttribute(data)!;
+        if (!isMessageKey(key)) throw new Error(`Unknown UI message: ${key}`);
+        if (attribute) node.setAttribute(attribute, t(key));
+        else node.textContent = t(key);
+      }
+    }
+    syncCharCount();
+    syncControls();
+    syncResultLabels();
+    syncSelectionLabels();
+    syncProgress();
+    renderError();
+    syncCopyLabel(ui.copy);
+    syncCopyLabel(ui.selectionCopy);
+  }
+
+  ui.uiLanguage.addEventListener('change', () => {
+    if (!isUiLanguage(ui.uiLanguage.value)) return;
+    preferences.uiLanguage = ui.uiLanguage.value;
+    applyLocale();
+    persist();
+  });
 
   ui.targetLanguage.addEventListener('change', () => {
     if (!isTargetLanguageCode(ui.targetLanguage.value)) return;
@@ -641,7 +690,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     void copyText(
       selectionView.translation,
       ui.selectionCopy,
-      '超过 32,000 字，请减小选区。',
+      'selectionCopyTooLong',
     );
   });
 
@@ -661,6 +710,7 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   };
   window.addEventListener('beforeunload', onBeforeUnload);
 
+  applyLocale();
   syncCharCount();
   syncControls();
   syncDisplayState();
@@ -670,10 +720,19 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   renderSelection();
 
   return {
+    updateHostLocale(nextLocale) {
+      if (disposed) return;
+      hostLocale = nextLocale;
+      applyLocale();
+    },
     dispose() {
+      disposed = true;
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.clearTimeout(selectionTimer);
       selectionGeneration += 1;
+      selectionQueue = null;
+      for (const timer of copyTimers.values()) window.clearTimeout(timer);
+      copyTimers.clear();
       activeRun?.controller.abort();
     },
   };

@@ -7,7 +7,7 @@ import {
   splitLongText,
   splitParagraphs,
 } from '../src/translation/plan';
-import { TranslationError } from '../src/translation/errors';
+import { TranslationError, TranslationLimitError } from '../src/translation/errors';
 import type { ProviderLimits } from '../src/translation/types';
 
 const limits: ProviderLimits = {
@@ -151,7 +151,7 @@ describe('translation run', () => {
           return { translations: ['你好'] };
         },
       }),
-    ).rejects.toMatchObject({ code: 'cancelled' });
+    ).rejects.toMatchObject({ code: 'cancelled', reason: 'cancelled' });
     expect(called).toBe(false);
   });
 
@@ -164,6 +164,17 @@ describe('translation run', () => {
         signal: new AbortController().signal,
         translate: async () => ({ translations: ['only one'] }),
       }),
-    ).rejects.toBeInstanceOf(TranslationError);
+    ).rejects.toMatchObject({ code: 'invalid-response', reason: 'count-mismatch' });
+  });
+
+  it('uses a RangeError-compatible typed limit error with its numeric limit', () => {
+    try {
+      createTranslationPlan('x'.repeat(50_001), limits);
+      throw new Error('expected input limit error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RangeError);
+      expect(error).toBeInstanceOf(TranslationLimitError);
+      expect(error).toMatchObject({ limit: 50_000, reason: 'text-too-long' });
+    }
   });
 });

@@ -134,6 +134,27 @@ button:disabled {
   padding: 1px 1px 14px;
 }
 
+.locale-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 12px;
+  color: var(--tp-muted);
+  font-size: 11px;
+}
+
+.locale-control select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--tp-border);
+  border-radius: var(--tp-control-radius);
+  background: var(--tp-subtle);
+  color: var(--tp-fg);
+}
+
 .brand {
   display: flex;
   min-width: 0;
@@ -265,6 +286,7 @@ button:disabled {
 
 .card-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -276,11 +298,14 @@ button:disabled {
   min-width: 0;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .auto-switch {
   display: inline-flex;
-  height: 24px;
+  min-height: 24px;
   align-items: center;
   gap: 6px;
   padding: 0;
@@ -290,7 +315,8 @@ button:disabled {
   font-size: 9.5px;
   font-weight: 550;
   line-height: 1;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: left;
   transition: color 0.14s ease;
 }
 
@@ -344,6 +370,8 @@ button:disabled {
 }
 
 .char-count {
+  flex: 0 0 auto;
+  white-space: nowrap;
   color: var(--tp-muted);
   font-size: 9.5px;
   font-variant-numeric: tabular-nums;
@@ -511,6 +539,7 @@ button:disabled {
   min-width: 0;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .selection-icon {
@@ -529,7 +558,9 @@ button:disabled {
 }
 
 .selection-title {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 10.5px;
   font-weight: 650;
   letter-spacing: 0.01em;
@@ -537,13 +568,12 @@ button:disabled {
 }
 
 .selection-meta {
-  overflow: hidden;
+  flex: 1 0 100%;
   color: var(--tp-muted);
   font-size: 9.5px;
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .selection-actions {
@@ -737,6 +767,7 @@ button:disabled {
 
 .result-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
