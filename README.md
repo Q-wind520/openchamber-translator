@@ -9,6 +9,7 @@
 - 如果你已经在 OpenCode 中配置了 DeepSeek，只需把 Small Model 指向它即可。
 - 翻译过程显示进度，可取消；结果可一键复制。
 - 自动跟随 OpenChamber 的明暗主题和字体。
+- 界面支持简体中文、English 和 Русский；可跟随 OpenChamber，也可手动选择。
 
 ## 环境要求
 
@@ -49,6 +50,12 @@ npm run check
 
 ## 翻译方式
 
+### 界面语言
+
+在面板顶部的「界面语言」中选择「跟随 OpenChamber」、`简体中文`、`English` 或 `Русский`。默认跟随宿主语言：中文使用简体中文界面，英文使用 English，俄文使用 Русский；缺失、格式错误或不支持的宿主语言使用 English。自动模式会在 OpenChamber 提供新的就绪上下文时更新；手动选择不受影响。选择会保存在现有 `preferences-v2` 设置中，并保留目标语言、显示方式和自动划词开关。
+
+切换立即生效，不会重载面板、中断正在进行的翻译或改变翻译目标。原文和结果不会因切换而丢失，但扩展不会持久化原文或译文。切换前已发送给 OpenChamber 的通知及宿主自己的按钮不保证重新翻译。若保存失败，当前面板仍使用所选语言并显示提示，但重新打开后可能无法保留该选择。
+
 ### 全文翻译
 
 1. 粘贴文章或 Markdown 到输入框，也可以点击「剪贴板」读取。
@@ -84,7 +91,7 @@ npm run check
 - 不访问网络，不运行本地服务，不读取项目文件。
 - 不申请任何翻译服务集成，不需要单独配置 API Key。
 - 原文会通过 OpenChamber 的 Small Model 发送给你在 OpenCode 中配置的模型提供商；会消耗对应模型的额度。
-- 原文、译文和偏好不会写入 OpenChamber 会话；只持久化目标语言、显示方式和自动划词开关。
+- 原文和译文不会持久化或写入 OpenChamber 会话；扩展只在 `preferences-v2` 中持久化界面语言选择、目标语言、显示方式和自动划词开关。
 - 复制大结果时受 OpenChamber 剪贴板 32,000 字符上限限制，请分段复制。
 
 ## 开发
@@ -94,6 +101,20 @@ npm run dev        # esbuild watch -> panel/main.js
 npm run typecheck  # tsc --noEmit
 npm test           # Vitest 单元测试
 npm run check      # typecheck + test + production build
+```
+
+可重复运行真实浏览器面板回归（无需模型 API；构建脚本会生成面板与启动流程两套检查文件）：
+
+```bash
+node test/browser-build.mjs
+python3 -m http.server 4389 --bind 127.0.0.1 --directory /tmp/opencode/locale-russian/browser
+```
+
+在浏览器打开 `http://127.0.0.1:4389/` 和 `http://127.0.0.1:4389/boot.browser.html`，确认两页均显示 `PASS`（失败时显示 `FAIL`）。可将构建目录作为 `browser-build.mjs` 的参数指定为其他位置，以适配不同平台。若已安装 Chrome，也可无界面运行：
+
+```bash
+google-chrome --headless --no-sandbox --user-data-dir=/tmp/opencode/locale-russian/chrome-profile --virtual-time-budget=30000 --dump-dom http://127.0.0.1:4389/
+google-chrome --headless --no-sandbox --user-data-dir=/tmp/opencode/locale-russian/chrome-profile --virtual-time-budget=30000 --dump-dom http://127.0.0.1:4389/boot.browser.html
 ```
 
 目录：

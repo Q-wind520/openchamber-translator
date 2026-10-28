@@ -11,6 +11,11 @@ const target = getTargetLanguage('zh-Hans');
 const signal = () => new AbortController().signal;
 
 describe('OpenCode translator', () => {
+  it('leaves missing external diagnostics empty for localization at the UI boundary', async () => {
+    const translate = createOpenCodeTranslator({ host: { generate: async () => { throw null; } } });
+    await expect(translate({ segments: ['Hello'], target, signal: signal() }))
+      .rejects.toMatchObject({ reason: 'unknown', message: '' });
+  });
   it('calls host.generate with the user text and target instructions', async () => {
     const generate = vi.fn(
       async (_request: { prompt: string; system?: string; maxOutputTokens?: number }) => ({
@@ -54,6 +59,7 @@ describe('OpenCode translator', () => {
       translate({ segments: ['Hello'], target, signal: signal() }),
     ).rejects.toMatchObject({
       code: 'no-model',
+      reason: 'no-model',
       message: expect.stringContaining('设置 → 会话 → Small Model'),
     });
   });
@@ -68,7 +74,7 @@ describe('OpenCode translator', () => {
     });
     await expect(
       failed({ segments: ['Hello'], target, signal: signal() }),
-    ).rejects.toMatchObject({ code: 'model-failed' });
+    ).rejects.toMatchObject({ code: 'model-failed', reason: 'model-failed' });
 
     const timedOut = createOpenCodeTranslator({
       host: {
@@ -79,7 +85,7 @@ describe('OpenCode translator', () => {
     });
     await expect(
       timedOut({ segments: ['Hello'], target, signal: signal() }),
-    ).rejects.toMatchObject({ code: 'timeout' });
+    ).rejects.toMatchObject({ code: 'timeout', reason: 'timeout' });
   });
 
   it('rejects empty generation output', async () => {
@@ -88,7 +94,39 @@ describe('OpenCode translator', () => {
     });
     await expect(
       translate({ segments: ['Hello'], target, signal: signal() }),
-    ).rejects.toMatchObject({ code: 'invalid-response' });
+    ).rejects.toMatchObject({ code: 'invalid-response', reason: 'empty-response' });
+  });
+
+  it.each([
+    ['NOT_GRANTED', 'permission-denied'],
+    ['HOST_UNAVAILABLE', 'provider-unavailable'],
+    ['DISABLED', 'provider-unavailable'],
+    ['RESPONSE_TOO_LARGE', 'response-too-large'],
+  ] as const)('maps %s to reason %s', async (hostCode, reason) => {
+    const translate = createOpenCodeTranslator({
+      host: {
+        generate: async () => {
+          throw new HostRequestError(hostCode, 'host detail');
+        },
+      },
+    });
+    await expect(translate({ segments: ['Hello'], target, signal: signal() }))
+      .rejects.toMatchObject({ reason });
+  });
+
+  it('classifies malformed response shape and preserves unknown diagnostics', async () => {
+    const malformed = createOpenCodeTranslator({ host: { generate: async () => null as never } });
+    await expect(malformed({ segments: ['Hello'], target, signal: signal() }))
+      .rejects.toMatchObject({ reason: 'invalid-response-shape' });
+    const external = createOpenCodeTranslator({
+      host: {
+        generate: async () => {
+          throw new Error('external detail');
+        },
+      },
+    });
+    await expect(external({ segments: ['Hello'], target, signal: signal() }))
+      .rejects.toMatchObject({ reason: 'unknown', message: 'external detail' });
   });
 
   it('does not call the host when already cancelled', async () => {
@@ -99,7 +137,7 @@ describe('OpenCode translator', () => {
 
     await expect(
       translate({ segments: ['Hello'], target, signal: controller.signal }),
-    ).rejects.toMatchObject({ code: 'cancelled' });
+    ).rejects.toMatchObject({ code: 'cancelled', reason: 'cancelled' });
     expect(generate).not.toHaveBeenCalled();
   });
 

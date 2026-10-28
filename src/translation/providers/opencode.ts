@@ -57,41 +57,48 @@ function mapGenerateError(error: unknown): TranslationError {
         return new TranslationError(
           '未配置 Small Model。请在 设置 → 会话 → Small Model 中选择模型后重试。',
           'no-model',
+          'no-model',
         );
       case 'MODEL_FAILED':
         return new TranslationError(
           '模型调用失败，请检查模型是否可用。',
+          'model-failed',
           'model-failed',
         );
       case 'HOST_TIMEOUT':
         return new TranslationError(
           '模型响应超时，请缩短文本或换用更快的模型。',
           'timeout',
+          'timeout',
         );
       case 'NOT_GRANTED':
         return new TranslationError(
           '缺少模型权限，请在 设置 → 扩展 中重新批准。',
           'provider',
+          'permission-denied',
         );
       case 'HOST_UNAVAILABLE':
       case 'DISABLED':
         return new TranslationError(
           '当前无法使用模型，请重新打开面板。',
           'provider',
+          'provider-unavailable',
         );
       case 'RESPONSE_TOO_LARGE':
-        return new TranslationError('模型返回内容过大，请缩短文本。', 'invalid-response');
+        return new TranslationError('模型返回内容过大，请缩短文本。', 'invalid-response', 'response-too-large');
       default:
         return new TranslationError(
-          error.message || '模型调用失败，请重试。',
+          error.message,
           'provider',
+          'unknown',
         );
     }
   }
 
   return new TranslationError(
-    error instanceof Error ? error.message : '模型调用失败，请重试。',
+    error instanceof Error ? error.message : '',
     'provider',
+    'unknown',
   );
 }
 
@@ -117,12 +124,12 @@ export function createOpenCodeTranslator(options: OpenCodeTranslatorOptions): Pr
 
       throwIfAborted(signal);
       if (typeof generated?.text !== 'string') {
-        throw new TranslationError('模型返回异常结果，请重试。', 'invalid-response');
+        throw new TranslationError('模型返回异常结果，请重试。', 'invalid-response', 'invalid-response-shape');
       }
 
       const translation = cleanGeneratedTranslation(generated.text);
       if (!translation) {
-        throw new TranslationError('模型返回空译文，请重试。', 'invalid-response');
+        throw new TranslationError('模型返回空译文，请重试。', 'invalid-response', 'empty-response');
       }
       translations.push(translation);
     }

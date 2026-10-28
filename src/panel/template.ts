@@ -11,14 +11,14 @@ export const PANEL_TEMPLATE = `
       </span>
       <div class="brand-copy">
         <h1>Translator</h1>
-        <p title="在 设置 → 会话 → Small Model 中选择模型">OPENCODE</p>
+        <p data-i18n-title="modelHint">OPENCODE</p>
       </div>
     </div>
 
     <label class="target-control" for="target-language">
-      <span class="target-eyebrow">译为</span>
+      <span class="target-eyebrow" data-i18n="target"></span>
       <span class="target-select-wrap">
-        <select class="target-select" id="target-language" aria-label="目标语言"></select>
+        <select class="target-select" id="target-language" data-i18n-aria-label="targetLanguage"></select>
         <span class="target-chevron" aria-hidden="true">
           <svg viewBox="0 0 16 16" fill="none"><path d="m4.5 6.5 3.5 3 3.5-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
@@ -26,30 +26,40 @@ export const PANEL_TEMPLATE = `
     </label>
   </header>
 
+  <div class="locale-control">
+    <label for="ui-language" data-i18n="interfaceLanguage"></label>
+    <select id="ui-language">
+      <option value="auto" data-i18n="auto"></option>
+      <option value="zh-CN">简体中文</option>
+      <option value="en">English</option>
+      <option value="ru">Русский</option>
+    </select>
+  </div>
+
   <div class="editor-card">
     <div class="card-top">
-      <label class="field-title" for="source-input">原文</label>
+      <label class="field-title" for="source-input" data-i18n="source"></label>
       <div class="card-tools">
-        <button class="auto-switch" id="auto-selection-toggle" type="button" role="switch" aria-checked="true" title="选中原文时自动划词翻译">
-          <span>自动划词</span>
+        <button class="auto-switch" id="auto-selection-toggle" type="button" role="switch" aria-checked="true" data-i18n-title="autoSelectionHint">
+          <span data-i18n="autoSelection"></span>
           <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
         </button>
-        <span class="char-count" id="char-count">0 字</span>
+        <span class="char-count" id="char-count"></span>
       </div>
     </div>
-    <textarea class="source-input" id="source-input" rows="8" spellcheck="false" maxlength="100000" placeholder="粘贴或输入原文…"></textarea>
+    <textarea class="source-input" id="source-input" rows="8" spellcheck="false" maxlength="100000" data-i18n-placeholder="inputPlaceholder"></textarea>
     <div class="editor-footer">
       <div class="mini-actions">
-        <button class="icon-button icon-button-small" id="paste" type="button" aria-label="读取剪贴板" title="读取剪贴板">
+        <button class="icon-button icon-button-small" id="paste" type="button" data-i18n-aria-label="paste" data-i18n-title="paste">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="4.5" width="12" height="16" rx="2.5" stroke="currentColor" stroke-width="1.6"/><path d="M9 4.5V3.8c0-.7.6-1.3 1.3-1.3h3.4c.7 0 1.3.6 1.3 1.3v.7H9Z" fill="currentColor"/></svg>
         </button>
-        <button class="icon-button icon-button-small" id="clear" type="button" aria-label="清空原文" title="清空">
+        <button class="icon-button icon-button-small" id="clear" type="button" data-i18n-aria-label="clear" data-i18n-title="clear">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         </button>
       </div>
       <button class="primary-button" id="translate" type="button" disabled>
         <span class="button-spinner" aria-hidden="true"></span>
-        <span id="translate-label">翻译全文</span>
+        <span id="translate-label"></span>
       </button>
     </div>
   </div>
@@ -60,15 +70,15 @@ export const PANEL_TEMPLATE = `
         <span class="selection-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none"><path d="M5 8.5V6.8A1.8 1.8 0 0 1 6.8 5h1.7M15.5 5h1.7A1.8 1.8 0 0 1 19 6.8v1.7M19 15.5v1.7a1.8 1.8 0 0 1-1.8 1.8h-1.7M8.5 19H6.8A1.8 1.8 0 0 1 5 17.2v-1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="m9 9-2.4 6m2.1-2.2h3.4M14 12.2l1.8 2.8M18 12l-2.2 3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </span>
-        <span class="selection-title" id="selection-title">划词翻译</span>
+        <span class="selection-title" id="selection-title" data-i18n="selection"></span>
         <span class="selection-meta" id="selection-meta"></span>
       </div>
       <div class="selection-actions">
-        <button class="icon-button icon-button-small copy-button" id="selection-copy" type="button" data-label="复制划词译文" aria-label="复制划词译文" title="复制划词译文" hidden>
+        <button class="icon-button icon-button-small copy-button" id="selection-copy" type="button" hidden>
           <svg class="copy-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="8.5" y="8.5" width="10" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 5.5h-8a2 2 0 0 0-2 2v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <svg class="check-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5.5 12.5 4.1 4 8.9-9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button class="icon-button icon-button-small" id="selection-close" type="button" aria-label="关闭划词翻译" title="关闭">
+        <button class="icon-button icon-button-small" id="selection-close" type="button" data-i18n-aria-label="closeSelection" data-i18n-title="closeSelection">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         </button>
       </div>
@@ -76,12 +86,12 @@ export const PANEL_TEMPLATE = `
     <div class="selection-body">
       <div class="selection-loading" id="selection-loading" role="status">
         <span class="spinner" aria-hidden="true"></span>
-        <span id="selection-loading-text">翻译中…</span>
+        <span id="selection-loading-text" data-i18n="translating"></span>
       </div>
       <p class="selection-output" id="selection-output" tabindex="0" hidden></p>
       <div class="selection-error" id="selection-error" hidden>
         <span id="selection-error-message"></span>
-        <button class="text-button" id="selection-retry" type="button">重试</button>
+        <button class="text-button" id="selection-retry" type="button" data-i18n="retry"></button>
       </div>
     </div>
   </article>
@@ -89,8 +99,8 @@ export const PANEL_TEMPLATE = `
   <div class="progress-card" id="progress" role="status" hidden>
     <div class="progress-line">
       <span class="spinner" aria-hidden="true"></span>
-      <span class="progress-text" id="progress-text">正在翻译…</span>
-      <button class="text-button progress-cancel" id="cancel" type="button">取消</button>
+      <span class="progress-text" id="progress-text"></span>
+      <button class="text-button progress-cancel" id="cancel" type="button" data-i18n="cancel"></button>
     </div>
     <div class="progress-track" aria-hidden="true"><span class="progress-bar" id="progress-bar"></span></div>
   </div>
@@ -102,35 +112,35 @@ export const PANEL_TEMPLATE = `
     <div class="error-copy">
       <p id="error-message"></p>
       <div class="error-actions">
-        <button class="text-button" id="error-retry" type="button">重试</button>
+        <button class="text-button" id="error-retry" type="button" data-i18n="retry"></button>
       </div>
     </div>
   </div>
 
   <div class="result-area" id="result-area" hidden aria-live="polite">
     <div class="result-toolbar">
-      <div class="display-switch" role="group" aria-label="显示方式">
-        <button class="display-option is-active" data-display="bilingual" type="button" aria-pressed="true">对照</button>
-        <button class="display-option" data-display="translation" type="button" aria-pressed="false">译文</button>
-        <button class="display-option" data-display="source" type="button" aria-pressed="false">原文</button>
+      <div class="display-switch" role="group" data-i18n-aria-label="displayMode">
+        <button class="display-option is-active" data-display="bilingual" type="button" aria-pressed="true" data-i18n="bilingual"></button>
+        <button class="display-option" data-display="translation" type="button" aria-pressed="false" data-i18n="translation"></button>
+        <button class="display-option" data-display="source" type="button" aria-pressed="false" data-i18n="source"></button>
       </div>
       <div class="result-tools">
         <span class="result-meta" id="result-meta"></span>
-        <button class="icon-button icon-button-small collapse-button" id="collapse" type="button" aria-label="收起译文" title="收起译文" aria-expanded="true" aria-controls="result">
+        <button class="icon-button icon-button-small collapse-button" id="collapse" type="button" aria-expanded="true" aria-controls="result">
           <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 14 6-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button class="icon-button icon-button-small copy-button" id="copy" type="button" data-label="复制译文" aria-label="复制译文" title="复制译文">
+        <button class="icon-button icon-button-small copy-button" id="copy" type="button">
           <svg class="copy-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="8.5" y="8.5" width="10" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 5.5h-8a2 2 0 0 0-2 2v9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <svg class="check-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5.5 12.5 4.1 4 8.9-9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
     </div>
-    <div class="result" id="result" tabindex="0" aria-label="译文内容"></div>
+    <div class="result" id="result" tabindex="0" data-i18n-aria-label="resultContent"></div>
   </div>
 
   <p class="privacy-note">
     <span class="privacy-dot" aria-hidden="true"></span>
-    内容不写入会话
+    <span data-i18n="privacy"></span>
   </p>
 </div>
 `;

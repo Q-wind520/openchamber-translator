@@ -1,5 +1,5 @@
 import { throwIfAborted } from './async';
-import { TranslationError } from './errors';
+import { TranslationError, TranslationLimitError } from './errors';
 import type { TargetLanguage } from './languages';
 import type {
   ProviderLimits,
@@ -115,7 +115,7 @@ export function createTranslationPlan(text: string, limits: ProviderLimits): Tra
     return { paragraphs: [], segments: [], sourceText: '' };
   }
   if (sourceText.length > MAX_TRANSLATION_CHARS) {
-    throw new RangeError(`单次最多翻译 ${MAX_TRANSLATION_CHARS.toLocaleString('zh-CN')} 个字符。`);
+    throw new TranslationLimitError(`单次最多翻译 ${MAX_TRANSLATION_CHARS.toLocaleString('zh-CN')} 个字符。`, MAX_TRANSLATION_CHARS);
   }
 
   const paragraphs: PlanParagraph[] = [];
@@ -223,6 +223,7 @@ export async function runTranslation(
           throw new TranslationError(
             '模型返回的结果数量不匹配，请重试。',
             'invalid-response',
+            'count-mismatch',
           );
         }
 
@@ -248,7 +249,7 @@ export async function runTranslation(
   if (options.signal.aborted) throwIfAborted(options.signal);
   if (firstError) throw firstError;
   if (translations.some((translation) => typeof translation !== 'string')) {
-    throw new TranslationError('翻译没有完成，请重试。', 'invalid-response');
+    throw new TranslationError('翻译没有完成，请重试。', 'invalid-response', 'incomplete-result');
   }
 
   const paragraphs = plan.paragraphs.map((paragraph) => ({
