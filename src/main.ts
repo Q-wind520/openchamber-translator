@@ -42,7 +42,7 @@ host.onReady((context) => {
   void (async () => {
     const preferences = await loadPreferences(host, context.locale);
     const ready = latestReady ?? context;
-    bootLocale = resolveUiLocale(preferences.uiLanguage, ready.locale);
+    bootLocale = resolveUiLocale(ready.locale);
     document.documentElement.lang = bootLocale;
     return mountApp({ host, root: panelRoot, ready, preferences });
   })()

@@ -26,16 +26,6 @@ export const PANEL_TEMPLATE = `
     </label>
   </header>
 
-  <div class="locale-control">
-    <label for="ui-language" data-i18n="interfaceLanguage"></label>
-    <select id="ui-language">
-      <option value="auto" data-i18n="auto"></option>
-      <option value="zh-CN">简体中文</option>
-      <option value="en">English</option>
-      <option value="ru">Русский</option>
-    </select>
-  </div>
-
   <div class="editor-card">
     <div class="card-top">
       <label class="field-title" for="source-input" data-i18n="source"></label>
@@ -47,7 +37,7 @@ export const PANEL_TEMPLATE = `
         <span class="char-count" id="char-count"></span>
       </div>
     </div>
-    <textarea class="source-input" id="source-input" rows="8" spellcheck="false" maxlength="100000" data-i18n-placeholder="inputPlaceholder"></textarea>
+    <textarea class="source-input" id="source-input" rows="8" spellcheck="false" maxlength="100000" dir="auto" data-i18n-placeholder="inputPlaceholder"></textarea>
     <div class="editor-footer">
       <div class="mini-actions">
         <button class="icon-button icon-button-small" id="paste" type="button" data-i18n-aria-label="paste" data-i18n-title="paste">
@@ -88,7 +78,7 @@ export const PANEL_TEMPLATE = `
         <span class="spinner" aria-hidden="true"></span>
         <span id="selection-loading-text" data-i18n="translating"></span>
       </div>
-      <p class="selection-output" id="selection-output" tabindex="0" hidden></p>
+      <p class="selection-output" id="selection-output" tabindex="0" dir="auto" hidden></p>
       <div class="selection-error" id="selection-error" hidden>
         <span id="selection-error-message"></span>
         <button class="text-button" id="selection-retry" type="button" data-i18n="retry"></button>

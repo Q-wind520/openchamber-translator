@@ -28,24 +28,24 @@ function context(locale: string): HostReadyContext {
   };
 }
 
-async function scenario(name: string, options: { noReady?: boolean; hold?: boolean; rejectStorage?: boolean; mountFailure?: boolean; manual?: string }, check: (f: ReturnType<typeof setup>) => Promise<void>) {
+async function scenario(name: string, options: { noReady?: boolean; hold?: boolean; rejectStorage?: boolean; mountFailure?: boolean; readyLocale?: string }, check: (f: ReturnType<typeof setup>) => Promise<void>) {
   const f = setup(options);
   try { await check(f); results.push(`PASS ${name}`); }
   catch (error) { results.push(`FAIL ${name}: ${String(error)}`); }
   finally { f.dispose(); }
 }
 
-function setup(options: { noReady?: boolean; hold?: boolean; rejectStorage?: boolean; mountFailure?: boolean; manual?: string }) {
+function setup(options: { noReady?: boolean; hold?: boolean; rejectStorage?: boolean; mountFailure?: boolean; readyLocale?: string }) {
   const frame = document.createElement('iframe');
   let gets = 0;
   let release = () => {};
-  let saved: JsonValue = { uiLanguage: options.manual ?? 'auto', targetLanguage: 'ja', displayMode: 'bilingual', autoSelection: true };
+  let saved: JsonValue = { targetLanguage: 'ja', displayMode: 'bilingual', autoSelection: true };
   const send = (data: object) => frame.contentWindow?.postMessage({ ...envelope, ...data }, location.origin);
   const ready = (locale: string) => send({ type: 'ready', payload: context(locale) });
   const onMessage = (event: MessageEvent<GuestMessage>) => {
     const data = event.data;
     if (event.source !== frame.contentWindow || data?.channel !== envelope.channel) return;
-    if (data.type === 'hello') { if (!options.noReady) ready('en-US'); return; }
+    if (data.type === 'hello') { if (!options.noReady) ready(options.readyLocale ?? 'en-US'); return; }
     if (data.type !== 'storage') return;
     if (data.payload.op === 'get') {
       gets++;
@@ -81,32 +81,27 @@ async function run() {
     await wait(6100);
     assert(f.doc().querySelector('.fatal')?.textContent?.includes('Cannot connect to OpenChamber'), 'English connection failure');
   });
-  await scenario('saved language localizes mount failure', { manual: 'ru', mountFailure: true }, async (f) => {
+  await scenario('host language localizes mount failure', { readyLocale: 'ru-RU', mountFailure: true }, async (f) => {
     await until(() => Boolean(f.doc()?.querySelector('.fatal')));
     assert(f.doc().querySelector('.fatal')?.textContent?.includes('Не удалось загрузить'), 'Russian failure');
     assert(f.doc().documentElement.lang === 'ru', 'fatal document locale');
     assert(f.gets() === 1, 'single storage read');
   });
   await scenario('storage rejection falls back to automatic host locale', { rejectStorage: true }, async (f) => {
-    await until(() => Boolean(f.doc()?.getElementById('ui-language')));
+    await until(() => Boolean(f.doc()?.getElementById('source-input')));
     f.ready('ru-RU'); await until(() => f.doc().documentElement.lang === 'ru');
     assert(f.gets() === 1, 'no second load');
   });
   await scenario('latest ready wins during storage and after startup', { hold: true }, async (f) => {
     await until(() => f.gets() === 1);
     f.ready('ru-RU'); await wait(30); f.release();
-    await until(() => Boolean(f.doc()?.getElementById('ui-language')));
+    await until(() => Boolean(f.doc()?.getElementById('source-input')));
     assert(f.doc().documentElement.lang === 'ru', 'latest ready during storage');
     const input = f.doc().querySelector<HTMLTextAreaElement>('#source-input')!; input.value = 'Kept original';
     const target = f.doc().querySelector<HTMLSelectElement>('#target-language')!;
-    f.ready('zh-TW'); await until(() => f.doc().documentElement.lang === 'zh-CN');
+    f.ready('zh-TW'); await until(() => f.doc().documentElement.lang === 'zh-TW');
     assert(input === f.doc().getElementById('source-input') && input.value === 'Kept original' && target.value === 'ja', 'ready preserves user state');
-    const select = f.doc().querySelector<HTMLSelectElement>('#ui-language')!;
-    select.value = 'ru'; select.dispatchEvent(new Event('change'));
-    f.ready('en-US'); await wait(30);
-    assert(f.doc().documentElement.lang === 'ru', 'manual override');
-    select.value = 'auto'; select.dispatchEvent(new Event('change'));
-    assert(f.doc().documentElement.lang === 'en', 'auto uses latest ready');
+    f.ready('en-US'); await until(() => f.doc().documentElement.lang === 'en');
     assert(f.gets() === 1, 'one storage load across ready updates');
   });
   result.textContent = results.join('\n');

@@ -134,27 +134,6 @@ button:disabled {
   padding: 1px 1px 14px;
 }
 
-.locale-control {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 12px;
-  margin-bottom: 12px;
-  color: var(--tp-muted);
-  font-size: 11px;
-}
-
-.locale-control select {
-  min-width: 0;
-  max-width: 100%;
-  padding: 5px 8px;
-  border: 1px solid var(--tp-border);
-  border-radius: var(--tp-control-radius);
-  background: var(--tp-subtle);
-  color: var(--tp-fg);
-}
-
 .brand {
   display: flex;
   min-width: 0;
@@ -258,7 +237,7 @@ button:disabled {
 
 .target-chevron {
   position: absolute;
-  right: -1px;
+  inset-inline-end: -1px;
   display: inline-flex;
   color: var(--tp-muted);
   pointer-events: none;
@@ -300,7 +279,7 @@ button:disabled {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .auto-switch {
@@ -316,7 +295,7 @@ button:disabled {
   font-weight: 550;
   line-height: 1;
   white-space: normal;
-  text-align: left;
+  text-align: start;
   transition: color 0.14s ease;
 }
 
@@ -341,7 +320,7 @@ button:disabled {
 .switch-thumb {
   position: absolute;
   top: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 11px;
   height: 11px;
   border-radius: 50%;
@@ -360,6 +339,10 @@ button:disabled {
 .auto-switch[aria-checked="true"] .switch-thumb {
   background: var(--tp-primary-fg);
   transform: translateX(13px);
+}
+
+[dir="rtl"] .auto-switch[aria-checked="true"] .switch-thumb {
+  transform: translateX(-13px);
 }
 
 .field-title {
@@ -426,7 +409,7 @@ button:disabled {
   min-width: 0;
   align-items: center;
   gap: 0;
-  margin-left: -4px;
+  margin-inline-start: -4px;
 }
 
 .text-button {
@@ -581,7 +564,7 @@ button:disabled {
   flex: 0 0 auto;
   align-items: center;
   gap: 1px;
-  margin-right: -2px;
+  margin-inline-end: -2px;
 }
 
 .selection-body {
@@ -746,7 +729,7 @@ button:disabled {
   align-items: center;
   gap: 3px;
   margin-top: 4px;
-  margin-left: -6px;
+  margin-inline-start: -6px;
 }
 
 .error-actions .text-button {
@@ -812,7 +795,7 @@ button:disabled {
   min-width: 0;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .result-meta {

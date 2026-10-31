@@ -1,5 +1,6 @@
 import { HostRequestError, type JsonValue } from '@openchamber/sdk';
-import { mountApp } from '../src/panel/app';
+import { mountApp, type AppHandle } from '../src/panel/app';
+import { UI_LOCALES } from '../src/panel/i18n';
 
 const root = document.querySelector<HTMLElement>('#root')!;
 const output = document.querySelector<HTMLElement>('#test-results')!;
@@ -26,10 +27,11 @@ function element<T extends HTMLElement>(id: string): T {
   assert(found, `Missing #${id}`);
   return found as T;
 }
-function changeLanguage(value: string): void {
-  const select = element<HTMLSelectElement>('ui-language');
-  select.value = value;
-  select.dispatchEvent(new Event('change', { bubbles: true }));
+let currentApp: AppHandle | null = null;
+function documentLang(): string { return document.documentElement.lang; }
+function setHostLocale(value: string): void {
+  if (!currentApp) throw new Error('No mounted app');
+  currentApp.updateHostLocale(value);
 }
 
 function checkLayout(): void {
@@ -65,6 +67,7 @@ async function fixture(locale = 'en-US', values = new Map<string, JsonValue>()) 
   };
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { readText: () => read() } });
   const app = await mountApp({ host, root, ready: { locale } });
+  currentApp = app;
   return {
     app, calls, toasts, values,
     setGenerate(fn: typeof generate) { generate = fn; },
@@ -78,14 +81,14 @@ async function test(name: string, body: (f: Awaited<ReturnType<typeof fixture>>)
   const f = await fixture();
   try { await body(f); results.push(`PASS ${name}`); }
   catch (error) { results.push(`FAIL ${name}: ${String(error)}`); }
-  finally { f.app.dispose(); root.replaceChildren(); }
+  finally { f.app.dispose(); currentApp = null; root.replaceChildren(); }
 }
 
 async function run() {
   const preview = new URLSearchParams(location.search).get('preview');
   if (preview) {
     const f = await fixture();
-    changeLanguage(preview);
+    setHostLocale(preview);
     if (new URLSearchParams(location.search).get('theme') === 'dark') {
       for (const [key, value] of Object.entries({ background: '#17191d', foreground: '#eeeef2', subtle: '#24272d', elevated: '#202329', 'muted-foreground': '#a9adb7' })) {
         document.documentElement.style.setProperty(`--surface-${key}`, value);
@@ -108,21 +111,23 @@ async function run() {
     const input = element<HTMLTextAreaElement>('source-input');
     input.value = 'Original text'; input.dispatchEvent(new Event('input'));
     input.setSelectionRange(1, 5);
-    changeLanguage('ru');
+    setHostLocale('ru');
     assert(document.documentElement.lang === 'ru', 'Russian document language');
     assert(input === element('source-input') && input.value === 'Original text', 'same input and content');
     assert(input.selectionStart === 1 && input.selectionEnd === 5, 'selection preserved');
     assert(element('translate-label').textContent === 'Перевести всё', 'Russian button');
   });
-  await test('three locales, accessible attributes and icons', async () => {
-    for (const locale of ['zh-CN', 'en', 'ru']) {
-      changeLanguage(locale);
+  await test('every locale, accessible attributes and icons', async () => {
+    for (const locale of UI_LOCALES) {
+      setHostLocale(locale);
       assert(document.documentElement.lang === locale, `lang ${locale}`);
+      assert(document.documentElement.dir === (locale === 'ar' || locale === 'he' ? 'rtl' : 'ltr'), `dir ${locale}`);
       assert(element<HTMLTextAreaElement>('source-input').placeholder.length > 0, 'placeholder');
       assert(element('paste').getAttribute('aria-label'), 'paste accessible name');
       assert(element('copy').querySelectorAll('svg').length === 2, 'SVG survives translation');
-      assert(element('ui-language').tagName === 'SELECT', 'native keyboard accessible select');
+      assert(!document.getElementById('ui-language'), 'no manual language selector');
     }
+    setHostLocale('en');
   });
   await test('result, selection card, mode, collapse and scroll survive switching', async (f) => {
     const translated = 'translated text '.repeat(200);
@@ -144,7 +149,7 @@ async function run() {
     input.scrollTop = 40;
     assert(output.scrollTop === 40 && input.scrollTop === 40, 'selection and input are actually scrollable');
     const count = f.calls.length;
-    changeLanguage('ru');
+    setHostLocale('ru');
     assert(paragraph !== null && translation === element('result').firstChild, 'result nodes retained');
     assert(element('result').hidden && element('result').classList.contains('mode-translation'), 'collapse and mode');
     assert(output.textContent === translated.trim() && !element('selection-card').hidden, 'selection card retained');
@@ -160,11 +165,10 @@ async function run() {
     input.value = 'Hello'; input.dispatchEvent(new Event('input'));
     const target = element<HTMLSelectElement>('target-language'); target.value = 'ja'; target.dispatchEvent(new Event('change'));
     element('translate').click(); await until(() => f.calls.length === 1);
-    changeLanguage('ru');
+    setHostLocale('ru');
     assert(f.calls.length === 1 && target.value === 'ja' && f.calls[0]?.system?.includes('Japanese'), 'independent target');
-    assert(!element<HTMLSelectElement>('ui-language').disabled, 'UI selector enabled while busy');
     assert(element('translate-label').textContent === 'Перевод…', 'busy label');
-    element('cancel').click(); changeLanguage('en');
+    element('cancel').click(); setHostLocale('en');
     assert(element('progress-text').textContent === 'Cancelling…', 'cancellation phase retained');
     pending.resolve({ text: 'ignored' }); await until(() => element('progress').hidden === true);
     assert(element('result-area').hidden, 'cancelled result not shown');
@@ -173,7 +177,7 @@ async function run() {
     const pending = deferred<{ text: string }>(); f.setGenerate(() => pending.promise);
     const input = element<HTMLTextAreaElement>('source-input'); input.value = 'Hello'; input.dispatchEvent(new Event('input'));
     input.setSelectionRange(0, 5); input.dispatchEvent(new Event('select'));
-    await until(() => f.calls.length === 1); changeLanguage('ru');
+    await until(() => f.calls.length === 1); setHostLocale('ru');
     pending.resolve({ text: 'selection result' }); await until(() => !element('selection-output').hidden);
     assert(element('selection-output').textContent === 'selection result', 'selection result');
     assert(element('selection-meta').textContent?.includes('символов'), 'new locale metadata');
@@ -182,11 +186,11 @@ async function run() {
     const input = element<HTMLTextAreaElement>('source-input'); input.value = 'Hello'; input.dispatchEvent(new Event('input'));
     element('translate').click(); await until(() => !element('result-area').hidden);
     element('copy').click(); await until(() => element('copy').classList.contains('is-copied'));
-    changeLanguage('ru'); assert(element('copy').title === 'Скопировано', 'copied label updated');
+    setHostLocale('ru'); assert(element('copy').title === 'Скопировано', 'copied label updated');
     await until(() => !element('copy').classList.contains('is-copied'));
     assert(element('copy').title === 'Скопировать перевод', 'timer did not restore old locale');
     const pending = deferred<string>(); f.setRead(() => pending.promise);
-    element('paste').click(); changeLanguage('en'); pending.resolve('clipboard content');
+    element('paste').click(); setHostLocale('en'); pending.resolve('clipboard content');
     await until(() => f.toasts.includes('Clipboard read.'));
     assert(input.value === 'clipboard content', 'deferred paste content');
   });
@@ -194,27 +198,28 @@ async function run() {
     f.setGenerate(async () => { throw new HostRequestError('NO_MODEL', 'model not configured'); });
     const input = element<HTMLTextAreaElement>('source-input'); input.value = 'Hello'; input.dispatchEvent(new Event('input'));
     element('translate').click(); await until(() => !element('error').hidden);
-    changeLanguage('ru'); assert(element('error-message').textContent?.includes('Small Model не настроена'), 'known error translated');
+    setHostLocale('ru'); assert(element('error-message').textContent?.includes('Small Model не настроена'), 'known error translated');
     f.setGenerate(async () => { throw new Error('<img src=x onerror=alert(1)>'); });
     element('error-retry').click(); await until(() => element('error-message').textContent?.includes('<img') === true);
     assert(!element('error-message').querySelector('img'), 'diagnostics are not HTML');
-    changeLanguage('en'); assert(element('error-message').textContent?.includes('Translation did not complete'), 'generic message translated');
+    setHostLocale('en'); assert(element('error-message').textContent?.includes('Translation did not complete'), 'generic message translated');
     input.value = 'x'.repeat(2001); input.dispatchEvent(new Event('input')); input.setSelectionRange(0, 2001); input.dispatchEvent(new Event('select'));
-    await until(() => !element('selection-error').hidden); changeLanguage('ru');
+    await until(() => !element('selection-error').hidden); setHostLocale('ru');
     assert(element('selection-error-message').textContent?.includes('Выделено более'), 'selection limit updated');
   });
-  await test('save failure and recovery, reopen, automatic host updates', async (f) => {
-    f.failSave(true); changeLanguage('ru'); await until(() => f.toasts.some((text) => text.includes('Не удалось сохранить')));
-    assert(document.documentElement.lang === 'ru', 'failed save does not revert');
-    f.failSave(false); changeLanguage('zh-CN'); changeLanguage('en'); changeLanguage('ru');
-    await until(() => (f.values.get('preferences-v2') as { uiLanguage?: string })?.uiLanguage === 'ru');
+  await test('save failure, reopen and automatic host updates', async (f) => {
+    setHostLocale('ru');
+    f.failSave(true);
+    element('auto-selection-toggle').click();
+    await until(() => f.toasts.some((text) => text.includes('Не удалось сохранить')));
+    assert(documentLang() === 'ru', 'failed save does not change the locale');
+    f.failSave(false);
     f.app.dispose(); const reopened = await fixture('en-US', f.values);
     try {
-      assert(document.documentElement.lang === 'ru', 'manual preference restored');
-      reopened.app.updateHostLocale('zh-TW'); assert(document.documentElement.lang === 'ru', 'manual override preserved');
-      changeLanguage('auto'); assert(document.documentElement.getAttribute('lang') === 'zh-CN', 'auto uses latest host locale');
-      reopened.app.updateHostLocale('fr-FR'); assert(document.documentElement.getAttribute('lang') === 'en', 'unsupported host fallback');
-      reopened.app.updateHostLocale('RU_ru'); assert(document.documentElement.getAttribute('lang') === 'ru', 'live host locale');
+      assert(documentLang() === 'en', 'host locale on reopen');
+      reopened.app.updateHostLocale('zh-TW'); assert(documentLang() === 'zh-TW', 'traditional Chinese host locale');
+      reopened.app.updateHostLocale('fr-FR'); assert(documentLang() === 'fr', 'supported host locale');
+      reopened.app.updateHostLocale('RU_ru'); assert(documentLang() === 'ru', 'live host locale');
     } finally { reopened.app.dispose(); }
   });
   output.textContent = results.join('\n');

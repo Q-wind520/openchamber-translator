@@ -22,7 +22,7 @@ import {
   type Preferences,
 } from './preferences';
 import { PANEL_TEMPLATE } from './template';
-import { describeError, formatError, formatCount, formatDuration, isMessageKey, isUiLanguage, message, resolveUiLocale, type ErrorMessage, type MessageKey } from './i18n';
+import { describeError, formatError, formatCount, formatDuration, isMessageKey, localeDirection, message, resolveUiLocale, type ErrorMessage, type MessageKey } from './i18n';
 
 interface ResultState {
   outcome: TranslationOutcome;
@@ -71,14 +71,13 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   const { host, root } = options;
   const preferences = options.preferences ?? await loadPreferences(host, options.ready.locale);
   let hostLocale = options.ready.locale;
-  let locale = resolveUiLocale(preferences.uiLanguage, hostLocale);
+  let locale = resolveUiLocale(hostLocale);
   const t = (key: MessageKey, params?: Record<string, number | string>) => message(locale, key, params);
   const translateWithModel = createOpenCodeTranslator({ host });
 
   root.innerHTML = PANEL_TEMPLATE;
 
   const ui = {
-    uiLanguage: byId<HTMLSelectElement>('ui-language'),
     targetLanguage: byId<HTMLSelectElement>('target-language'),
     sourceInput: byId<HTMLTextAreaElement>('source-input'),
     charCount: byId('char-count'),
@@ -201,12 +200,14 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
       if (preferences.displayMode !== 'translation') {
         const source = document.createElement('p');
         source.className = 'paragraph-source';
+        source.dir = 'auto';
         source.textContent = paragraph.source;
         pair.append(source);
       }
       if (preferences.displayMode !== 'source') {
         const translation = document.createElement('p');
         translation.className = 'paragraph-translation';
+        translation.dir = 'auto';
         translation.textContent = paragraph.translation;
         pair.append(translation);
       }
@@ -591,9 +592,9 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
   }
 
   function applyLocale(): void {
-    locale = resolveUiLocale(preferences.uiLanguage, hostLocale);
+    locale = resolveUiLocale(hostLocale);
     document.documentElement.lang = locale;
-    ui.uiLanguage.value = preferences.uiLanguage;
+    document.documentElement.dir = localeDirection(locale);
     for (const [data, attribute] of [
       ['data-i18n', null], ['data-i18n-title', 'title'],
       ['data-i18n-placeholder', 'placeholder'], ['data-i18n-aria-label', 'aria-label'],
@@ -614,13 +615,6 @@ export async function mountApp(options: MountAppOptions): Promise<AppHandle> {
     syncCopyLabel(ui.copy);
     syncCopyLabel(ui.selectionCopy);
   }
-
-  ui.uiLanguage.addEventListener('change', () => {
-    if (!isUiLanguage(ui.uiLanguage.value)) return;
-    preferences.uiLanguage = ui.uiLanguage.value;
-    applyLocale();
-    persist();
-  });
 
   ui.targetLanguage.addEventListener('change', () => {
     if (!isTargetLanguageCode(ui.targetLanguage.value)) return;
