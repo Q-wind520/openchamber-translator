@@ -44,6 +44,27 @@ describe('OpenCode translator', () => {
     expect(cleanGeneratedTranslation('译文：你好，世界')).toBe('你好，世界');
     expect(cleanGeneratedTranslation('Translation: hello')).toBe('hello');
     expect(cleanGeneratedTranslation('  plain translation  ')).toBe('plain translation');
+    expect(cleanGeneratedTranslation('<segment id="1">你好</segment>')).toBe('你好');
+    expect(cleanGeneratedTranslation('```text\n<segment id="1">你好</segment>\n```')).toBe('你好');
+  });
+
+  it('does not request or return segment tags for a single segment', async () => {
+    const generate = vi.fn(
+      async (_request: { prompt: string; system?: string; maxOutputTokens?: number }) => ({
+        text: '<segment id="1">冲突的</segment>',
+      }),
+    );
+    const translate = createOpenCodeTranslator({ host: { generate } });
+
+    const result = await translate({
+      segments: ['conflicting'],
+      target,
+      signal: signal(),
+    });
+
+    expect(result.translations).toEqual(['冲突的']);
+    const [request] = generate.mock.calls[0]!;
+    expect(request.system).not.toContain('<segment id=');
   });
 
   it('maps NO_MODEL to actionable guidance', async () => {
